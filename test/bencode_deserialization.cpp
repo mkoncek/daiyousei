@@ -279,6 +279,16 @@ Test_case("dictionary", []
 	}
 	{
 		auto de = Deserializer();
+		de << "d1:ai1e1:ai1ee";
+		assert_true(Deserialization_error::dictionary_duplicate_key == de.deserialize().error());
+	}
+	{
+		auto de = Deserializer();
+		de << "d1:bi1e1:ai1ee";
+		assert_true(Deserialization_error::dictionary_unsorted == de.deserialize().error());
+	}
+	{
+		auto de = Deserializer();
 		de << "d1:a1:a1:ble1:cdee";
 		auto dict = de.deserialize().value().get_dictionary();
 		auto it = dict.begin();
@@ -296,13 +306,49 @@ Test_case("dictionary", []
 	}
 	{
 		auto de = Deserializer();
-		de << "d1:ai1e1:ai1ee";
-		assert_true(Deserialization_error::dictionary_duplicate_key == de.deserialize().error());
-	}
-	{
-		auto de = Deserializer();
-		de << "d1:bi1e1:ai1ee";
-		assert_true(Deserialization_error::dictionary_unsorted == de.deserialize().error());
+		de << "d1:a1:a1:bl2:abd2:abli456eeee1:cd1:ade1:bdeee";
+		auto dict = de.deserialize().value().get_dictionary();
+		auto it = dict.begin();
+		assert_eq("a", it->name);
+		assert_eq("a", it->value.get_byte_string());
+		++it;
+		assert_eq("b", it->name);
+		{
+			auto& lst = it->value.get_list();
+			auto lit = lst.begin();
+			assert_eq("ab", lit++->get_byte_string());
+			{
+				auto& ddict = lit++->get_dictionary();
+				auto dit = ddict.begin();
+				assert_eq("ab", dit->name);
+				{
+					auto& llst = dit->value.get_list();
+					auto llit = llst.begin();
+					assert_eq(456, llit++->get_integer());
+					assert_true(llst.end() == llit);
+				}
+				++dit;
+				assert_true(ddict.end() == dit);
+			}
+			assert_true(lst.end() == lit);
+		}
+		++it;
+		assert_eq("c", it->name);
+		{
+			auto& ddict = it->value.get_dictionary();
+			auto dit = ddict.begin();
+			assert_eq("a", dit->name);
+			assert_true(dit->value.get_dictionary().empty());
+			++dit;
+			assert_eq("b", dit->name);
+			assert_true(dit->value.get_dictionary().empty());
+			++dit;
+			assert_true(ddict.end() == dit);
+		}
+		++it;
+		
+		assert_true(dict.end() == it);
+		assert_true(de.empty());
 	}
 }),
 
@@ -348,6 +394,56 @@ Test_case("dictionary incomplete", []
 		assert_eq("b", it->name);
 		assert_eq(1, it->value.get_integer());
 		++it;
+		assert_true(dict.end() == it);
+		assert_true(de.empty());
+	}
+	{
+		auto de = Deserializer();
+		for (char c : std::string_view("d1:a1:a1:bl2:abd2:abli456eeee1:cd1:ade1:bdeee"))
+		{
+			assert_true(not de.deserialize().has_value());
+			de << std::string_view(&c, 1);
+		}
+		auto dict = de.deserialize().value().get_dictionary();
+		auto it = dict.begin();
+		assert_eq("a", it->name);
+		assert_eq("a", it->value.get_byte_string());
+		++it;
+		assert_eq("b", it->name);
+		{
+			auto& lst = it->value.get_list();
+			auto lit = lst.begin();
+			assert_eq("ab", lit++->get_byte_string());
+			{
+				auto& ddict = lit++->get_dictionary();
+				auto dit = ddict.begin();
+				assert_eq("ab", dit->name);
+				{
+					auto& llst = dit->value.get_list();
+					auto llit = llst.begin();
+					assert_eq(456, llit++->get_integer());
+					assert_true(llst.end() == llit);
+				}
+				++dit;
+				assert_true(ddict.end() == dit);
+			}
+			assert_true(lst.end() == lit);
+		}
+		++it;
+		assert_eq("c", it->name);
+		{
+			auto& ddict = it->value.get_dictionary();
+			auto dit = ddict.begin();
+			assert_eq("a", dit->name);
+			assert_true(dit->value.get_dictionary().empty());
+			++dit;
+			assert_eq("b", dit->name);
+			assert_true(dit->value.get_dictionary().empty());
+			++dit;
+			assert_true(ddict.end() == dit);
+		}
+		++it;
+		
 		assert_true(dict.end() == it);
 		assert_true(de.empty());
 	}

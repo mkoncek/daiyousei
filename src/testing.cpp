@@ -68,7 +68,15 @@ void fail_neq(Ostream_printer expected, Ostream_printer actual, std::source_loca
 
 void testing::Test_case::operator()() const
 {
-	test_();
+	try
+	{
+		test_();
+	}
+	catch (...)
+	{
+		std::cout << "[" << "\033[91;1m" << "ERROR" << "\033[m" << "] an exception thrown from test case " << "\033[96;1m" << name_ << "\033[m" << ":\n";
+		throw;
+	}
 }
 
 void assert_true(bool value, std::source_location location)

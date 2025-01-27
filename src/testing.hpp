@@ -3,7 +3,6 @@
 #include <initializer_list>
 #include <ostream>
 #include <source_location>
-#include <stdexcept>
 #include <type_traits>
 
 namespace testing
