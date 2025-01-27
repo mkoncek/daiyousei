@@ -19,14 +19,6 @@ void checked_close(int fd)
 	}
 }
 
-struct Close
-{
-	void operator()(int fd) noexcept
-	{
-		close(fd);
-	}
-};
-
 std::error_code read_into(int fd, std::string& output)
 {
 	while (true)
@@ -51,54 +43,101 @@ std::error_code read_into(int fd, std::string& output)
 	return {};
 }
 
-using FD = std::experimental::unique_resource<int, Close>;
-
 extern char** environ;
 
-struct Arguments
+struct Arguments : std::span<const char* const>
 {
 	std::optional<std::filesystem::path> unix_socket;
-	std::optional<int> start_forwarded_args;
+	std::optional<std::size_t> start_forwarded_args;
 	
-	Arguments(int argc, const char* const* argv)
+	std::expected<std::string_view, std::pair<int, std::string>> get_value(std::size_t& pos)
 	{
-		int i = 0;
-		while (i != argc)
+		std::size_t pos_eq = 0;
+		
+		while ((*this)[pos][pos_eq] != '\n' and (*this)[pos][pos_eq] != '=')
 		{
-			auto arg = std::string_view(argv[i]);
+			++pos_eq;
+		}
+		
+		if ((*this)[pos][pos_eq] == '=')
+		{
+			return std::string_view((*this)[pos] + pos_eq + 1);
+		}
+		else if (++pos, pos >= (*this).size())
+		{
+			return std::unexpected(std::pair(255, "expected a value"));
+		}
+		else
+		{
+			return std::string_view((*this)[pos]);
+		}
+	}
+	
+	std::expected<void, std::pair<int, std::string>> parse()
+	{
+		std::size_t pos = 1;
+		while (pos != (*this).size())
+		{
+			auto arg = std::string_view((*this)[pos]);
 			
 			if (arg.starts_with("--unix-socket"))
 			{
-				
+				if (auto value = get_value(pos))
+				{
+					unix_socket.emplace(value.value());
+				}
+				else
+				{
+					return std::unexpected(value.error());
+				}
+			}
+			else if (arg == "--")
+			{
+				start_forwarded_args.emplace(pos);
+				break;
 			}
 			else
 			{
-				
+				return std::unexpected(std::pair(255, "unrecognized option"));
 			}
 		}
+		
+		return {};
 	}
 };
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const* argv)
 {
-	auto message = bencode::serializable::Dictionary();
+	auto args = Arguments(std::span(argv, argc));
 	
-	message.emplace_back("argc", bencode::serializable::Integer(argc));
+	if (auto result = args.parse(); not result)
 	{
+		std::clog << result.error().second << "\n";
+		return result.error().first;
+	}
+	
+	auto message = bencode::serializable::List();
+	
+	{
+		message.emplace_back("argv");
 		auto argv_list = bencode::serializable::List();
-		argv_list.reserve(argc);
+		auto start_forwarded_args = args.start_forwarded_args.value_or(args.size());
+		argv_list.reserve(1 + args.size() - start_forwarded_args);
 		std::cout << argc << "\n";
-		for (int i = 0; i != argc; ++i)
+		argv_list.emplace_back(bencode::serializable::Byte_string(args[0]));
+		for (std::size_t i = start_forwarded_args; i != args.size(); ++i)
 		{
 			std::cout << argv[i] << "\n";
 			argv_list.emplace_back(bencode::serializable::Byte_string(argv[i]));
 		}
-		message.emplace_back("argv", bencode::serializable::List(std::move(argv_list)));
+		message.emplace_back(bencode::serializable::List(std::move(argv_list)));
 	}
 	
-	message.emplace_back("cwd", bencode::serializable::Byte_string(std::filesystem::current_path().string()));
+	message.emplace_back("cwd");
+	message.emplace_back(bencode::serializable::Byte_string(std::filesystem::current_path().string()));
 	
 	{
+		message.emplace_back("env");
 		auto env_dict = bencode::serializable::Dictionary();
 		
 		for (const char* const* env = environ; *env != nullptr; ++env)
@@ -117,7 +156,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const* argv)
 			env_dict.emplace_back(std::string(*env, mid), bencode::serializable::Byte_string(*env + mid + 1, *env + end));
 		}
 		
-		message.emplace_back("env", bencode::serializable::Sorted_dictionary(std::move(env_dict)));
+		message.emplace_back(bencode::serializable::Sorted_dictionary(std::move(env_dict)));
 	}
 	
 	std::cout << bencode::serialize(message).value() << "\n";

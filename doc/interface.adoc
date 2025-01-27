@@ -1,22 +1,17 @@
+[.text-justify]
 = Daiyousei
 
 :source-highlighter: rouge
 
 == Arguments
+== Communication
+All communication is encoded in the https://en.wikipedia.org/wiki/Bencode[Bencode] encoding.
+Both parties communicate by sending a single list to each other.
+The start of the list means initiating communication and the list end means proper termination of communication.
+The list contains key-value pairs, similar to a dictionary but the keys can be repeated.
 
-
-== Program startup
-When the daemon starts, it sends the following dictionary over the communication channel
-
-[source, json]
-----
-{
-	"argv": [List<String>] Commandline arguments intended for passing
-	"cwd": [String] Current working directry
-	"env": [Dictionary<String>] Environment variables
-}
-----
-
+=== From client to server
+The following data is sent once immediately at program startup.
 [cols = 3]
 [%autowidth]
 |===
@@ -27,27 +22,27 @@ When the daemon starts, it sends the following dictionary over the communication
 |`env`|`Dictionary<String>`|Environment variables
 |===
 
-== Communication
-When the daemon is running it communicates with the actor exchanging the standard stream data and error codes.
+The following data is streamed and can be sent multiple times.
+[cols = 3]
+[%autowidth]
+|===
+|Key|Type|Description
 
-From daemon to actor::
-Standard input
-+
-[source, json]
-----
-{
-	"stdin": [String] Standard input
-}
-----
+|`stdin`|`String`|Standard input data chnuk
+|===
 
-From actor to daemon::
-The following can be sent together or separately
-+
-[source, json]
-----
-{
-	"stdout": [String] Standard output
-	"stderr": [String] Standard error output
-	"exitcode": [Integer] Exit code
-}
-----
+=== From server to client
+The server sends the following data to the client.
+[cols = 3]
+[%autowidth]
+|===
+|Key|Type|Description
+
+|`stdout`|`String`|Standard output data chunk
+|`stderr`|`String`|Standard error output data chunk
+|`exitcode`|`Integer`|Exit code
+|===
+
+Standard outputs are streamed in chunks and can be interleaved in repeated.
+The exit code value will be returned by the client unless a different error is encountered by the client.
+The server can still continue to communicate after sending the exit code and must still properly terminate the communication.

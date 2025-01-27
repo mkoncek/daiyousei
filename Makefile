@@ -1,7 +1,10 @@
 MAKEFLAGS += -r
 
-CXXFLAGS ?= -g -Wall -Wextra
+CXXFLAGS ?= -g -Wall -Wextra -Wpedantic
 CXXFLAGS += -std=c++23 -Isrc
+
+Dependency_file = $(addprefix target/dependencies/,$(addsuffix .mk,$(subst /,.,$(basename $(1)))))
+Object_file = $(addprefix target/object_files/,$(addsuffix .o,$(subst /,.,$(basename $(1)))))
 
 %/:
 	@mkdir -p $@
@@ -16,6 +19,9 @@ target/bin/test_%: CPPFLAGS = -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
 target/bin/test_%: LDLIBS = -lboost_unit_test_framework
 target/bin/test_bencode_serialization: test/bencode_serialization.cpp src/bencode.hpp
 target/bin/test_bencode_deserialization: test/bencode_deserialization.cpp src/bencode.hpp
+
+$(call Object_file,%): src/%.cpp | target/object_files/ target/dependencies/
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -MF $(call Dependency_file,$(<F)) -MT $(call Object_file,$(<F)) -c -o $(call Object_file,$(<F)) $(addprefix src/,$(<F))
 
 target/bin/main: src/main.cpp src/bencode.hpp
 
@@ -37,3 +43,5 @@ coverage: LDFLAGS += --coverage
 coverage: test | target/coverage/
 	@lcov --ignore-errors mismatch --output-file target/coverage.info --directory target/bin --capture --exclude '/usr/include/*'
 	@genhtml -o target/coverage target/coverage.info
+
+-include target/dependencies/*.mk
