@@ -1,338 +1,355 @@
 #include <bencode.hpp>
-
-#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MAIN
-#include <boost/test/unit_test.hpp>
+#include <testing.hpp>
 
 using namespace bencode;
 using namespace bencode::deserialized;
 
-BOOST_AUTO_TEST_CASE(test_int)
+std::initializer_list<testing::Test_case> testing::test_cases
+{
+Test_case("int", []
 {
 	{
 		auto de = Deserializer();
 		de << "i0e";
-		BOOST_TEST(0 == de.deserialize().value().get_integer().value);
-		BOOST_TEST(de.empty());
+		assert_eq(0, de.deserialize().value().get_integer().value);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "i123456e";
-		BOOST_TEST(123456 == de.deserialize().value().get_integer().value);
-		BOOST_TEST(de.empty());
+		assert_eq(123456, de.deserialize().value().get_integer().value);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "i-123456e";
-		BOOST_TEST(-123456 == de.deserialize().value().get_integer().value);
-		BOOST_TEST(de.empty());
+		assert_eq(-123456, de.deserialize().value().get_integer().value);
+		assert_true(de.empty());
 	}
-}
+}),
 
-BOOST_AUTO_TEST_CASE(test_int_incomplete)
+Test_case("int incomplete", []
 {
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("i0e"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST(0 == de.deserialize().value().get_integer().value);
-		BOOST_TEST(de.empty());
+		assert_eq(0, de.deserialize().value().get_integer().value);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("i123456e"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST(123456 == de.deserialize().value().get_integer().value);
-		BOOST_TEST(de.empty());
+		assert_eq(123456, de.deserialize().value().get_integer().value);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("i-123456e"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST(-123456 == de.deserialize().value().get_integer().value);
-		BOOST_TEST(de.empty());
+		assert_eq(-123456, de.deserialize().value().get_integer().value);
+		assert_true(de.empty());
 	}
-}
+}),
 
-BOOST_AUTO_TEST_CASE(test_byte_string)
+Test_case("byte_string", []
 {
 	{
 		auto de = Deserializer();
 		de << "0:";
-		BOOST_TEST("" == de.deserialize().value().get_byte_string());
-		BOOST_TEST(de.empty());
+		assert_eq("", de.deserialize().value().get_byte_string());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "3:foo";
-		BOOST_TEST("foo" == de.deserialize().value().get_byte_string());
-		BOOST_TEST(de.empty());
+		assert_eq("foo", de.deserialize().value().get_byte_string());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "7:bencode";
-		BOOST_TEST("bencode" == de.deserialize().value().get_byte_string());
-		BOOST_TEST(de.empty());
+		assert_eq("bencode", de.deserialize().value().get_byte_string());
+		assert_true(de.empty());
 	}
-}
+}),
 
-BOOST_AUTO_TEST_CASE(test_byte_string_incomplete)
+Test_case("byte_string incomplete", []
 {
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("0:"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST("" == de.deserialize().value().get_byte_string());
-		BOOST_TEST(de.empty());
+		assert_eq("", de.deserialize().value().get_byte_string());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("3:foo"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST("foo" == de.deserialize().value().get_byte_string());
-		BOOST_TEST(de.empty());
+		assert_eq("foo", de.deserialize().value().get_byte_string());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("11:eoobarbazee"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST("eoobarbazee" == de.deserialize().value().get_byte_string());
-		BOOST_TEST(de.empty());
+		assert_eq("eoobarbazee", de.deserialize().value().get_byte_string());
+		assert_true(de.empty());
 	}
-}
+}),
 
-BOOST_AUTO_TEST_CASE(test_list)
+Test_case("list", []
 {
 	{
 		auto de = Deserializer();
 		de << "le";
-		BOOST_TEST(de.deserialize().value().get_list().empty());
-		BOOST_TEST(de.empty());
+		assert_true(de.deserialize().value().get_list().empty());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "l1:ae";
 		auto list = de.deserialize().value().get_list();
 		auto it = list.begin();
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST((list.end() == it));
-		BOOST_TEST(de.empty());
+		assert_eq("a", it++->get_byte_string());
+		assert_true(list.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "l1:a1:ae";
 		auto list = de.deserialize().value().get_list();
 		auto it = list.begin();
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST((list.end() == it));
-		BOOST_TEST(de.empty());
+		assert_eq("a", it++->get_byte_string());
+		assert_eq("a", it++->get_byte_string());
+		assert_true(list.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "l1:ai5elee";
 		auto list = de.deserialize().value().get_list();
 		auto it = list.begin();
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST(5 == it++->get_integer());
-		BOOST_TEST(it++->get_list().empty());
-		BOOST_TEST((list.end() == it));
-		BOOST_TEST(de.empty());
+		assert_eq("a", it++->get_byte_string());
+		assert_eq(5, it++->get_integer());
+		assert_true(it++->get_list().empty());
+		assert_true(list.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "lllleeee";
 		auto list = de.deserialize().value().get_list();
-		BOOST_TEST(1 == list.size());
+		assert_eq(1uz, list.size());
 		list = std::move(list[0]).get_list();
-		BOOST_TEST(1 == list.size());
+		assert_eq(1uz, list.size());
 		list = std::move(list[0]).get_list();
-		BOOST_TEST(1 == list.size());
+		assert_eq(1uz, list.size());
 		list = std::move(list[0]).get_list();
-		BOOST_TEST(list.empty());
-		BOOST_TEST(de.empty());
+		assert_true(list.empty());
+		assert_true(de.empty());
 	}
-}
+}),
 
-BOOST_AUTO_TEST_CASE(test_list_incomplete)
+Test_case("list incomplete", []
 {
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("le"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST(de.deserialize().value().get_list().empty());
-		BOOST_TEST(de.empty());
+		assert_true(de.deserialize().value().get_list().empty());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("l1:ae"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
 		auto list = de.deserialize().value().get_list();
 		auto it = list.begin();
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST((list.end() == it));
-		BOOST_TEST(de.empty());
+		assert_eq("a", it++->get_byte_string());
+		assert_true(list.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("l1:a1:ae"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
 		auto list = de.deserialize().value().get_list();
 		auto it = list.begin();
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST((list.end() == it));
-		BOOST_TEST(de.empty());
+		assert_eq("a", it++->get_byte_string());
+		assert_eq("a", it++->get_byte_string());
+		assert_true(list.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("l1:ai5elee"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
 		auto list = de.deserialize().value().get_list();
 		auto it = list.begin();
-		BOOST_TEST("a" == it++->get_byte_string());
-		BOOST_TEST(5 == it++->get_integer());
-		BOOST_TEST(it++->get_list().empty());
-		BOOST_TEST((list.end() == it));
-		BOOST_TEST(de.empty());
+		assert_eq("a", it++->get_byte_string());
+		assert_eq(5, it++->get_integer());
+		assert_true(it++->get_list().empty());
+		assert_true(list.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("lllleeee"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
 		auto list = de.deserialize().value().get_list();
-		BOOST_TEST(1 == list.size());
+		assert_eq(1uz, list.size());
 		list = std::move(list[0]).get_list();
-		BOOST_TEST(1 == list.size());
+		assert_eq(1uz, list.size());
 		list = std::move(list[0]).get_list();
-		BOOST_TEST(1 == list.size());
+		assert_eq(1uz, list.size());
 		list = std::move(list[0]).get_list();
-		BOOST_TEST(list.empty());
-		BOOST_TEST(de.empty());
+		assert_true(list.empty());
+		assert_true(de.empty());
 	}
-}
+}),
 
-BOOST_AUTO_TEST_CASE(test_dictionary)
+Test_case("dictionary", []
 {
 	{
 		auto de = Deserializer();
 		de << "de";
-		BOOST_TEST(de.deserialize().value().get_dictionary().empty());
-		BOOST_TEST(de.empty());
+		assert_true(de.deserialize().value().get_dictionary().empty());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "d1:ai1ee";
 		auto dict = de.deserialize().value().get_dictionary();
 		auto it = dict.begin();
-		BOOST_TEST("a" == it->name);
-		BOOST_TEST(1 == it->value.get_integer());
+		assert_eq("a", it->name);
+		assert_eq(1, it->value.get_integer());
 		++it;
-		BOOST_TEST((dict.end() == it));
-		BOOST_TEST(de.empty());
+		assert_true(dict.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "d1:ai1e1:bi1ee";
 		auto dict = de.deserialize().value().get_dictionary();
 		auto it = dict.begin();
-		BOOST_TEST("a" == it->name);
-		BOOST_TEST(1 == it->value.get_integer());
+		assert_eq("a", it->name);
+		assert_eq(1, it->value.get_integer());
 		++it;
-		BOOST_TEST("b" == it->name);
-		BOOST_TEST(1 == it->value.get_integer());
+		assert_eq("b", it->name);
+		assert_eq(1, it->value.get_integer());
 		++it;
-		BOOST_TEST((dict.end() == it));
-		BOOST_TEST(de.empty());
+		assert_true(dict.end() == it);
+		assert_true(de.empty());
+	}
+	{
+		auto de = Deserializer();
+		de << "d1:a1:a1:ble1:cdee";
+		auto dict = de.deserialize().value().get_dictionary();
+		auto it = dict.begin();
+		assert_eq("a", it->name);
+		assert_eq("a", it->value.get_byte_string());
+		++it;
+		assert_eq("b", it->name);
+		assert_true(it->value.get_list().empty());
+		++it;
+		assert_eq("c", it->name);
+		assert_true(it->value.get_dictionary().empty());
+		++it;
+		assert_true(dict.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		de << "d1:ai1e1:ai1ee";
-		BOOST_TEST((Deserialization_error::dictionary_duplicate_key == de.deserialize().error()));
+		assert_true(Deserialization_error::dictionary_duplicate_key == de.deserialize().error());
 	}
 	{
 		auto de = Deserializer();
 		de << "d1:bi1e1:ai1ee";
-		BOOST_TEST((Deserialization_error::dictionary_unsorted == de.deserialize().error()));
+		assert_true(Deserialization_error::dictionary_unsorted == de.deserialize().error());
 	}
-}
+}),
 
-BOOST_AUTO_TEST_CASE(test_dictionary_incomplete)
+Test_case("dictionary incomplete", []
 {
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("de"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
-		BOOST_TEST(de.deserialize().value().get_dictionary().empty());
-		BOOST_TEST(de.empty());
+		assert_true(de.deserialize().value().get_dictionary().empty());
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("d1:ai1ee"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
 		auto dict = de.deserialize().value().get_dictionary();
 		auto it = dict.begin();
-		BOOST_TEST("a" == it->name);
-		BOOST_TEST(1 == it->value.get_integer());
+		assert_eq("a", it->name);
+		assert_eq(1, it->value.get_integer());
 		++it;
-		BOOST_TEST((dict.end() == it));
-		BOOST_TEST(de.empty());
+		assert_true(dict.end() == it);
+		assert_true(de.empty());
 	}
 	{
 		auto de = Deserializer();
 		for (char c : std::string_view("d1:ai1e1:bi1ee"))
 		{
-			BOOST_TEST(not de.deserialize().has_value());
+			assert_true(not de.deserialize().has_value());
 			de << std::string_view(&c, 1);
 		}
 		auto dict = de.deserialize().value().get_dictionary();
 		auto it = dict.begin();
-		BOOST_TEST("a" == it->name);
-		BOOST_TEST(1 == it->value.get_integer());
+		assert_eq("a", it->name);
+		assert_eq(1, it->value.get_integer());
 		++it;
-		BOOST_TEST("b" == it->name);
-		BOOST_TEST(1 == it->value.get_integer());
+		assert_eq("b", it->name);
+		assert_eq(1, it->value.get_integer());
 		++it;
-		BOOST_TEST((dict.end() == it));
-		BOOST_TEST(de.empty());
+		assert_true(dict.end() == it);
+		assert_true(de.empty());
 	}
-}
+}),
+};
