@@ -1,0 +1,53 @@
+= Daiyousei
+
+:source-highlighter: rouge
+
+== Arguments
+
+
+== Program startup
+When the daemon starts, it sends the following dictionary over the communication channel
+
+[source, json]
+----
+{
+	"argv": [List<String>] Commandline arguments intended for passing
+	"cwd": [String] Current working directry
+	"env": [Dictionary<String>] Environment variables
+}
+----
+
+[cols = 3]
+[%autowidth]
+|===
+|Key|Type|Description
+
+|`argv`|`List<String>`|Commandline arguments intended for passing
+|`cwd`|`String`|Current working directory
+|`env`|`Dictionary<String>`|Environment variables
+|===
+
+== Communication
+When the daemon is running it communicates with the actor exchanging the standard stream data and error codes.
+
+From daemon to actor::
+Standard input
++
+[source, json]
+----
+{
+	"stdin": [String] Standard input
+}
+----
+
+From actor to daemon::
+The following can be sent together or separately
++
+[source, json]
+----
+{
+	"stdout": [String] Standard output
+	"stderr": [String] Standard error output
+	"exitcode": [Integer] Exit code
+}
+----
