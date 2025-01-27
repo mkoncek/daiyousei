@@ -289,7 +289,9 @@ struct Byte_string : Deserializable, std::string
 
 struct List : Deserializable, std::vector<bencode::Deserialized>
 {
-	bool is_complete() const noexcept final override;
+	bool is_complete_ = false;
+	
+	bool is_complete() const noexcept final override {return is_complete_;}
 	
 	std::expected<void, Deserialization_error> append(std::vector<Deserializable*>& stack, deserialized::Integer value) final override;
 	std::expected<void, Deserialization_error> append(std::vector<Deserializable*>& stack, deserialized::Byte_string value) final override;
@@ -299,7 +301,9 @@ struct List : Deserializable, std::vector<bencode::Deserialized>
 
 struct Dictionary : Deserializable, std::vector<Field>
 {
-	bool is_complete() const noexcept final override;
+	bool is_complete_ = false;
+	
+	bool is_complete() const noexcept final override {return is_complete_;}
 	
 	std::expected<void, Deserialization_error> append(std::vector<Deserializable*>& stack, deserialized::Byte_string value) final override;
 };
@@ -483,11 +487,6 @@ std::expected<void, Deserialization_error> deserialized::Byte_string::append(
 	return std::unexpected(Deserialization_error::wrong_type);
 }
 
-bool deserialized::List::is_complete() const noexcept
-{
-	return false;
-}
-
 std::expected<void, Deserialization_error> deserialized::List::append(std::vector<Deserializable*>& stack, deserialized::Integer value)
 {
 	emplace_back();
@@ -530,11 +529,6 @@ std::expected<void, Deserialization_error> deserialized::List::append(std::vecto
 		stack.push_back(ptr);
 	}
 	return {};
-}
-
-bool deserialized::Dictionary::is_complete() const noexcept
-{
-	return false;
 }
 
 std::expected<void, Deserialization_error> deserialized::Dictionary::append(std::vector<Deserializable*>& stack, deserialized::Byte_string value)
@@ -712,6 +706,14 @@ struct Deserializer
 				{
 					if (data_[0] == 'e')
 					{
+						if (ref_type == typeid(deserialized::List&))
+						{
+							static_cast<deserialized::List*>(stack_.back())->is_complete_ = true;
+						}
+						else if (ref_type == typeid(deserialized::Dictionary&))
+						{
+							static_cast<deserialized::Dictionary*>(stack_.back())->is_complete_ = true;
+						}
 						stack_.pop_back();
 						consume(1);
 						continue;
