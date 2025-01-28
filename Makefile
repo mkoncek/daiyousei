@@ -27,7 +27,7 @@ $(call Object_file,%): src/%.cpp | target/object_files/ target/dependencies/
 target/lib/libtesting.a: $(call Object_file,testing.cpp) | target/lib/
 	$(AR) -rcs $@ $<
 
-target/bin/main: src/main.cpp src/bencode.hpp
+target/bin/main: $(call Object_file,main.cpp)
 
 main: target/bin/main
 	@./$<

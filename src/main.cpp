@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
+#include <sys/socket.h>
 
 #include <cerrno>
 #include <algorithm>
@@ -9,7 +10,7 @@
 #include <filesystem>
 #include <experimental/scope>
 
-#include <bencode.hpp>
+#include <client.hpp>
 
 void checked_close(int fd)
 {
@@ -19,20 +20,31 @@ void checked_close(int fd)
 	}
 }
 
-std::error_code read_into(int fd, std::string& output)
+std::expected<std::size_t, std::error_code> read_into(int fd, std::string& output)
 {
+	auto total_read_bytes = std::size_t(0);
+	
 	while (true)
 	{
 		auto prev_size = output.size();
-		output.resize(prev_size + 64);
+		output.resize(std::max(prev_size + 64, output.capacity()));
 		auto read_bytes = read(fd, output.data() + prev_size, output.size() - prev_size);
 		
 		if (read_bytes == -1)
 		{
-			return std::make_error_code(std::errc(errno));
+			if (errno == EWOULDBLOCK or errno == EAGAIN)
+			{
+				read_bytes = 0;
+			}
+			else
+			{
+				return std::unexpected(std::make_error_code(std::errc(errno)));
+			}
 		}
 		
 		output.resize(prev_size + read_bytes);
+		
+		total_read_bytes += read_bytes;
 		
 		if (read_bytes == 0)
 		{
@@ -40,71 +52,10 @@ std::error_code read_into(int fd, std::string& output)
 		}
 	}
 	
-	return {};
+	return total_read_bytes;
 }
 
 extern char** environ;
-
-struct Arguments : std::span<const char* const>
-{
-	std::optional<std::filesystem::path> unix_socket;
-	std::optional<std::size_t> start_forwarded_args;
-	
-	std::expected<std::string_view, std::pair<int, std::string>> get_value(std::size_t& pos)
-	{
-		std::size_t pos_eq = 0;
-		
-		while ((*this)[pos][pos_eq] != '\n' and (*this)[pos][pos_eq] != '=')
-		{
-			++pos_eq;
-		}
-		
-		if ((*this)[pos][pos_eq] == '=')
-		{
-			return std::string_view((*this)[pos] + pos_eq + 1);
-		}
-		else if (++pos, pos >= (*this).size())
-		{
-			return std::unexpected(std::pair(255, "expected a value"));
-		}
-		else
-		{
-			return std::string_view((*this)[pos]);
-		}
-	}
-	
-	std::expected<void, std::pair<int, std::string>> parse()
-	{
-		std::size_t pos = 1;
-		while (pos != (*this).size())
-		{
-			auto arg = std::string_view((*this)[pos]);
-			
-			if (arg.starts_with("--unix-socket"))
-			{
-				if (auto value = get_value(pos))
-				{
-					unix_socket.emplace(value.value());
-				}
-				else
-				{
-					return std::unexpected(value.error());
-				}
-			}
-			else if (arg == "--")
-			{
-				start_forwarded_args.emplace(pos);
-				break;
-			}
-			else
-			{
-				return std::unexpected(std::pair(255, "unrecognized option"));
-			}
-		}
-		
-		return {};
-	}
-};
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const* argv)
 {
@@ -112,7 +63,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const* argv)
 	
 	if (auto result = args.parse(); not result)
 	{
-		std::clog << result.error().second << "\n";
+		std::clog << "daiyousei: " << result.error().second << "\n";
 		return result.error().first;
 	}
 	
@@ -159,52 +110,31 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const* argv)
 		message.emplace_back(bencode::serializable::Sorted_dictionary(std::move(env_dict)));
 	}
 	
-	std::cout << bencode::serialize(message).value() << "\n";
-	
-	auto epoll_fd = std::experimental::make_unique_resource_checked(epoll_create1(0), -1, &checked_close);
-	
-	if (epoll_fd.get() == -1)
+	auto client = Client::create(args);
+	if (not client)
 	{
-		std::clog << "failed to create epoll file descriptor: " << std::strerror(errno) << "\n";
-		return 1;
+		std::clog << "daiyousei: " << client.error().second << "\n";
+		return client.error().first;
 	}
 	
+	if (auto serialized = bencode::serialize(message); not serialized)
 	{
-		auto event = epoll_event();
-		event.events = EPOLLIN;
-		event.data.fd = 0;
-		
-		if (epoll_ctl(epoll_fd.get(), EPOLL_CTL_ADD, 0, &event))
-		{
-			std::clog << "failed to add file descriptor to epoll: " << std::strerror(errno) << "\n";
-			return 1;
-		}
+		std::clog << "daiyousei: " << serialized.error().message() << "\n";
+		return 255;
+	}
+	else if (auto sent = client->send(serialized.value()); not sent)
+	{
+		std::clog << "daiyousei: " << sent.error().second << "\n";
+		return sent.error().first;
 	}
 	
-	auto events = std::array<epoll_event, 8>();
-	
-	fcntl(0, F_SETFL, O_NONBLOCK);
-	
-	while (true)
+	if (auto result = client->run())
 	{
-		auto ready_events = epoll_wait(epoll_fd.get(), events.data(), events.size(), -1);
-		for (int i = 0; i != ready_events; ++i)
-		{
-			std::cout << "## " << events[i].events << "\n";
-			std::cout << i << "\n";
-			char buf[512];
-			auto read_bytes = read(events[i].data.fd, &buf, std::size(buf));
-			std::cout << read_bytes << "\n";
-			if (read_bytes == -1)
-			{
-				std::clog << "read " << events[i].data.fd << " failed: " << std::strerror(errno) << "\n";
-				return 1;
-			}
-			else if (read_bytes == 0)
-			{
-				std::clog << "input stream " << events[i].data.fd << " closed"  << "\n";
-				return 0;
-			}
-		}
+		return result.value();
+	}
+	else
+	{
+		std::clog << "daiyousei: " << result.error().second << "\n";
+		return result.error().first;
 	}
 }
