@@ -12,6 +12,7 @@
 #include <variant>
 #include <expected>
 #include <vector>
+#include <stdexcept>
 #include <utility>
 #include <typeinfo>
 
@@ -69,12 +70,14 @@ struct Sorted_dictionary : private Dictionary
 	using Dictionary::size;
 	using Dictionary::data;
 };
+
+inline void sort_dictionary(std::span<Field> value) noexcept;
 } // namespace serializable
 
-inline std::error_code serialize(std::string& output, serializable::Integer value);
-inline std::error_code serialize(std::string& output, const serializable::Byte_string& value);
-inline std::error_code serialize(std::string& output, const serializable::List& value);
-inline std::error_code serialize(std::string& output, const serializable::Sorted_dictionary& value);
+inline void serialize(std::string& output, serializable::Integer value);
+inline void serialize(std::string& output, const serializable::Byte_string& value);
+inline void serialize(std::string& output, const serializable::List& value);
+inline void serialize(std::string& output, const serializable::Sorted_dictionary& value);
 
 struct Serializable : std::variant<serializable::Integer, serializable::Byte_string, serializable::List, serializable::Sorted_dictionary>
 {
@@ -96,22 +99,19 @@ struct Serializable : std::variant<serializable::Integer, serializable::Byte_str
 	{
 	}
 	
-	std::error_code serialize(std::string& output) const
+	void serialize(std::string& output) const
 	{
-		return std::visit([&output](const auto& value) noexcept -> std::error_code
+		std::visit([&output](const auto& value) noexcept -> void
 		{
-			return bencode::serialize(output, value);
+			bencode::serialize(output, value);
 		}, *this);
 	}
 	
-	std::expected<std::string, std::error_code> serialize() const noexcept
+	std::string serialize() const noexcept
 	{
 		auto result = std::string();
 		result.reserve(32);
-		if (auto ec = serialize(result))
-		{
-			return std::unexpected(ec);
-		}
+		serialize(result);
 		return result;
 	}
 };
@@ -122,15 +122,20 @@ struct serializable::Field
 	Serializable value;
 };
 
-serializable::Sorted_dictionary::Sorted_dictionary(Dictionary value) noexcept : Dictionary(std::move(value))
+void serializable::sort_dictionary(std::span<Field> value) noexcept
 {
-	std::ranges::sort(static_cast<Dictionary&>(*this), [](auto lhs, auto rhs) noexcept -> bool
+	std::ranges::sort(value, [](auto lhs, auto rhs) noexcept -> bool
 	{
 		return lhs < rhs;
 	}, [](const auto& value) noexcept -> std::string_view {return value.name;});
 }
 
-std::error_code serialize(std::string& output, serializable::Integer value)
+serializable::Sorted_dictionary::Sorted_dictionary(Dictionary value) noexcept : Dictionary(std::move(value))
+{
+	sort_dictionary(static_cast<Dictionary&>(*this));
+}
+
+void serialize(std::string& output, serializable::Integer value)
 {
 	auto prev_size = output.size();
 	// "i" + digits10 + round up + minus sign + "e"
@@ -144,18 +149,17 @@ std::error_code serialize(std::string& output, serializable::Integer value)
 	);
 	if (auto ec = std::make_error_code(error))
 	{
-		return ec;
+		throw std::logic_error(ec.message());
 	}
 	*end = 'e';
 	++end;
-	output.resize(end - reinterpret_cast<char*>(output.data()));
-	
-	return {};
+	output.resize(end - output.data());
 }
 
-std::error_code serialize(std::string& output, const serializable::Byte_string& value)
+inline void serialize(std::string& output, std::string_view value)
 {
 	auto prev_size = output.size();
+	// digits10 + round up + ':' + string
 	output.resize(prev_size + std::numeric_limits<std::size_t>::digits10 + 1 + 1 + value.size());
 	auto [end, error] = std::to_chars(
 		output.data() + prev_size,
@@ -164,60 +168,154 @@ std::error_code serialize(std::string& output, const serializable::Byte_string& 
 	);
 	if (auto ec = std::make_error_code(error))
 	{
-		return ec;
+		throw std::logic_error(ec.message());
 	}
 	*end = ':';
 	++end;
 	auto [in, out] = std::ranges::copy(value, end);
-	output.resize(out - reinterpret_cast<char*>(output.data()));
-	
-	return {};
+	output.resize(out - output.data());
 }
 
-std::error_code serialize(std::string& output, const serializable::List& value)
+inline void serialize(std::string& output, const char* value)
+{
+	return serialize(output, std::string_view(value));
+}
+
+void serialize(std::string& output, const serializable::Byte_string& value)
+{
+	return serialize(output, std::string_view(value));
+}
+
+void serialize(std::string& output, const serializable::List& value)
 {
 	output.push_back('l');
 	for (const auto& inner : value)
 	{
-		if (auto ec = inner.serialize(output))
-		{
-			return ec;
-		}
+		inner.serialize(output);
 	}
 	output.push_back('e');
-	
-	return {};
 }
 
-std::error_code serialize(std::string& output, const serializable::Sorted_dictionary& value)
+void serialize(std::string& output, const serializable::Sorted_dictionary& value)
 {
 	output.push_back('d');
 	for (const auto& [key, inner] : value)
 	{
-		if (auto ec = serialize(output, key))
-		{
-			return ec;
-		}
-		if (auto ec = inner.serialize(output))
-		{
-			return ec;
-		}
+		serialize(output, key);
+		inner.serialize(output);
 	}
 	output.push_back('e');
-	
-	return {};
 }
 
 template<typename Type>
-inline std::expected<std::string, std::error_code> serialize(const Type& value) noexcept
+inline std::string serialize(const Type& value) noexcept
 {
 	auto result = std::string();
 	result.reserve(32);
-	if (auto ec = serialize(result, value))
-	{
-		return std::unexpected(ec);
-	}
+	serialize(result, value);
 	return result;
+}
+
+struct Serializer : std::reference_wrapper<std::string>
+{
+	struct Serializer_buffer;
+	
+	inline static Serializer_buffer create() noexcept;
+	
+	void push_integer(bencode::Integer value)
+	{
+		return serialize(get(), value);
+	}
+	
+	void push_byte_string(std::string_view value)
+	{
+		return serialize(get(), value);
+	}
+	
+	void emplace_byte_string(auto&&... args)
+	{
+		return push_byte_string(std::string_view(std::forward<decltype(args)>(args)...));
+	}
+	
+	struct List_serializer;
+	
+	inline List_serializer push_list();
+	
+	struct Dictionary_serializer;
+	
+	inline Dictionary_serializer push_dictionary();
+};
+
+struct Serializer::Serializer_buffer : Serializer
+{
+	std::string buffer_;
+	
+	Serializer_buffer() noexcept : Serializer(buffer_)
+	{
+	}
+	
+	Serializer_buffer(Serializer_buffer&&) : Serializer(buffer_)
+	{
+	}
+	
+	struct Take : std::reference_wrapper<std::string>
+	{
+		~Take()
+		{
+			get().clear();
+		}
+		
+		operator std::string_view() noexcept
+		{
+			return std::string_view(get());
+		}
+	};
+	
+	Take take() noexcept
+	{
+		return Take(*this);
+	}
+};
+
+Serializer::Serializer_buffer Serializer::create() noexcept
+{
+	return Serializer::Serializer_buffer();
+}
+
+struct Serializer::List_serializer : Serializer
+{
+	~List_serializer()
+	{
+		get().push_back('e');
+	}
+	
+	List_serializer(Serializer parent) : Serializer(parent)
+	{
+		get().push_back('l');
+	}
+};
+
+Serializer::List_serializer Serializer::push_list()
+{
+	return List_serializer(*this);
+}
+
+struct Serializer::Dictionary_serializer : Serializer
+{
+	~Dictionary_serializer()
+	{
+		get().push_back('e');
+	}
+	
+	Dictionary_serializer(Serializer parent) : Serializer(parent)
+	{
+		get().push_back('d');
+	}
+};
+
+Serializer::Dictionary_serializer Serializer::push_dictionary()
+{
+	return Dictionary_serializer(*this);
 }
 
 enum struct Deserialization_error
@@ -274,7 +372,7 @@ struct Byte_string : Deserializable, std::string
 	
 	operator std::string_view() const noexcept
 	{
-		return std::string_view(*this);
+		return std::string_view(static_cast<const std::string&>(*this));
 	}
 	
 	bool is_complete() const noexcept final override {return complete_size == this->size();}

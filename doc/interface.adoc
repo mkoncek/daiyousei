@@ -28,7 +28,7 @@ The following data is streamed and can be sent multiple times.
 |===
 |Key|Type|Description
 
-|`stdin`|`String`|Standard input data chnuk
+|`stdin`|`String`|Standard input data chunk
 |===
 
 === From server to client

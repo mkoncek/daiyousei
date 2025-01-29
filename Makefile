@@ -1,6 +1,8 @@
 MAKEFLAGS += -r
 
-CXXFLAGS ?= -g -Wall -Wextra -Wpedantic
+CXXFLAGS ?= -g -Wall -Wextra -Wpedantic -fsanitize=undefined,address
+LDFLAGS ?= -fsanitize=undefined,address
+
 CXXFLAGS += -std=c++23 -Isrc
 
 Dependency_file = $(addprefix target/dependencies/,$(addsuffix .mk,$(subst /,.,$(basename $(1)))))

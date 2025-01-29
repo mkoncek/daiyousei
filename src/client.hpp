@@ -23,6 +23,17 @@ struct Client
 	std::experimental::unique_resource<int, void(*)(int)> epoll_fd_;
 	std::experimental::unique_resource<int, void(*)(int)> socket_;
 	std::optional<bencode::deserialized::Integer> exitcode_;
+	bencode::Serializer::Serializer_buffer serializer_;
+	
+	Client(
+		std::experimental::unique_resource<int, void(*)(int)> epoll_fd,
+		std::experimental::unique_resource<int, void(*)(int)> socket)
+		:
+		epoll_fd_(std::move(epoll_fd)),
+		socket_(std::move(socket)),
+		serializer_(bencode::Serializer::create())
+	{
+	}
 	
 	static void checked_close(int fd)
 	{
@@ -79,10 +90,10 @@ struct Client
 		
 		auto address = sockaddr_un();
 		address.sun_family = AF_UNIX;
-		auto sun_path = std::string_view();
+		auto sun_path = std::string();
 		if (args.unix_socket)
 		{
-			sun_path = std::string_view(args.unix_socket->c_str());
+			sun_path = args.unix_socket->string();
 		}
 		else if (auto unix_socket = std::getenv("DAIYOUSEI_UNIX_SOCKET"))
 		{
@@ -95,7 +106,7 @@ struct Client
 		
 		if (sun_path.size() >= std::size(address.sun_path))
 		{
-			return std::unexpected(std::pair(255, std::string("argument [unix socket] too long, value is: ") += sun_path));
+			return std::unexpected(std::pair(255, std::string("argument [unix socket] too long, value is: ") + sun_path));
 		}
 		std::ranges::copy(sun_path, address.sun_path);
 		
@@ -129,20 +140,83 @@ struct Client
 		
 		if (fcntl(socket_fd.get(), F_SETFL, O_NONBLOCK))
 		{
-			return std::unexpected(std::pair(255, std::string("failed to set non-blocking mode for unix socket: ") + std::strerror(errno)));
+			return std::unexpected(std::pair(255, std::string("failed to set non-blocking mode for unix socket") + sun_path + ": " + std::strerror(errno)));
 		}
 		
 		if (connect(socket_fd.get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)))
 		{
-			return std::unexpected(std::pair(255, std::string("failed to connect to unix socket: ") + std::strerror(errno)));
+			return std::unexpected(std::pair(255, std::string("failed to connect to unix socket ") + sun_path + ": " + std::strerror(errno)));
 		}
 		
 		return Client(std::move(epoll_fd), std::move(socket_fd));
 	}
 	
-	void handle_list(bencode::deserialized::List& list)
+	std::expected<void, std::pair<int, std::string>> handle_list(bencode::deserialized::List& list)
 	{
+		std::cout << "handle list" << "\n";
+		std::cout << list.size() << "\n";
 		
+		for (std::size_t i = 0; i + 1 < list.size(); i += 2)
+		{
+			auto key = std::string_view();
+			try
+			{
+				key = list[i].get_byte_string();
+			}
+			catch (std::bad_variant_access& ex)
+			{
+				return std::unexpected(std::pair(255, "expected key to be a byte string"));
+			}
+			
+			auto& value = list[i + 1];
+			
+			if (key == "exitcode")
+			{
+				try
+				{
+					exitcode_.emplace(value.get_integer());
+				}
+				catch (std::bad_variant_access& ex)
+				{
+					return std::unexpected(std::pair(255, "expected exitcode value to be an integer"));
+				}
+			}
+			else if (key == "stdout")
+			{
+				try
+				{
+					std::cout << value.get_byte_string();
+				}
+				catch (std::bad_variant_access& ex)
+				{
+					return std::unexpected(std::pair(255, "expected stdout value to be a byte string"));
+				}
+			}
+			else if (key == "stderr")
+			{
+				try
+				{
+					std::clog << value.get_byte_string();
+				}
+				catch (std::bad_variant_access& ex)
+				{
+					return std::unexpected(std::pair(255, "expected stderr value to be a byte string"));
+				}
+			}
+			else
+			{
+				return std::unexpected(std::pair(255, std::string("unrecognized key: ") + std::string(key)));
+			}
+		}
+		
+		if (list.size() % 2 == 1)
+		{
+			list[0] = std::move(list[list.size() - 1]);
+		}
+		
+		list.resize(list.size() % 2);
+		
+		return {};
 	}
 	
 	std::expected<std::ptrdiff_t, std::pair<int, std::string>> send(std::string_view data)
@@ -153,7 +227,7 @@ struct Client
 		}
 		else
 		{
-			return std::unexpected(std::pair(255, std::string("failed to send message: ") += std::strerror(errno)));
+			return std::unexpected(std::pair(255, std::string("failed to send message: ") + std::strerror(errno)));
 		}
 	}
 	
@@ -162,6 +236,8 @@ struct Client
 		auto events = std::array<epoll_event, 8>();
 		auto deserializer = bencode::Deserializer();
 		bool input_available = true;
+		auto input = std::string();
+		input.reserve(128);
 		
 		while (input_available)
 		{
@@ -170,7 +246,25 @@ struct Client
 			{
 				std::cout << "## " << events[i].events << "\n";
 				std::cout << i << "\n";
-				if (auto rresult = read_into(events[i].data.fd, deserializer.data_))
+				if (events[i].data.fd == 0)
+				{
+					if (auto rresult = read_into(events[i].data.fd, input); not rresult)
+					{
+						return std::unexpected(std::pair(255, rresult.error().message()));
+					}
+					
+					if (input.size() != 0)
+					{
+						serializer_.push_byte_string(input);
+						input.clear();
+						
+						if (auto sresult = send(serializer_.take()); not sresult)
+						{
+							return std::unexpected(sresult.error());
+						}
+					}
+				}
+				else if (auto rresult = read_into(events[i].data.fd, deserializer.data_))
 				{
 					std::cout << "|| " << deserializer.data_.size() << "\n";
 					if (rresult.value() == 0)
@@ -196,7 +290,10 @@ struct Client
 							return std::unexpected(std::pair(255, std::to_string(int(dresult.error()))));
 						}
 						
-						handle_list(*list);
+						if (auto result = handle_list(*list); not result)
+						{
+							return std::unexpected(result.error());
+						}
 						std::cout << list->size() << "\n";
 					}
 				}

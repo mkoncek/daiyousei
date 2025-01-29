@@ -14,6 +14,26 @@ struct Arguments : std::span<const char* const>
 	{
 	}
 	
+	static bool key_arg_equals(std::string_view arg, std::initializer_list<std::string_view> names) noexcept
+	{
+		std::size_t pos_eq = 0;
+		
+		while (arg[pos_eq] != '\0' and arg[pos_eq] != '=')
+		{
+			++pos_eq;
+		}
+		
+		for (auto name : names)
+		{
+			if (name == arg.substr(0, pos_eq))
+			{
+				return true;
+			}
+		}
+		
+		return false;
+	}
+	
 	std::expected<std::string_view, std::pair<int, std::string>> get_value(std::size_t& pos)
 	{
 		std::size_t pos_eq = 0;
@@ -43,7 +63,7 @@ struct Arguments : std::span<const char* const>
 		{
 			auto arg = std::string_view((*this)[pos]);
 			
-			if (arg.starts_with("--unix-socket"))
+			if (key_arg_equals(arg, {"--unix-socket"}))
 			{
 				if (auto value = get_value(pos))
 				{

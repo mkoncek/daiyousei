@@ -161,11 +161,11 @@ Test_case("list", []
 		de << "lllleeee";
 		auto list = de.deserialize().value().get_list();
 		assert_eq(1uz, list.size());
-		list = std::move(list[0]).get_list();
+		list = auto(std::move(list[0]).get_list());
 		assert_eq(1uz, list.size());
-		list = std::move(list[0]).get_list();
+		list = auto(std::move(list[0]).get_list());
 		assert_eq(1uz, list.size());
-		list = std::move(list[0]).get_list();
+		list = auto(std::move(list[0]).get_list());
 		assert_true(list.empty());
 		assert_true(de.empty());
 	}
@@ -234,11 +234,11 @@ Test_case("list incomplete", []
 		}
 		auto list = de.deserialize().value().get_list();
 		assert_eq(1uz, list.size());
-		list = std::move(list[0]).get_list();
+		list = auto(std::move(list[0]).get_list());
 		assert_eq(1uz, list.size());
-		list = std::move(list[0]).get_list();
+		list = auto(std::move(list[0]).get_list());
 		assert_eq(1uz, list.size());
-		list = std::move(list[0]).get_list();
+		list = auto(std::move(list[0]).get_list());
 		assert_true(list.empty());
 		assert_true(de.empty());
 	}

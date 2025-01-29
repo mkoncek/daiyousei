@@ -19,6 +19,7 @@ while True:
 	data = conn.recv(1024)
 	if data:
 		print(data)
+		conn.send(b'l8:exitcodei66ee')
 	else:
 		print("done")
 		break
