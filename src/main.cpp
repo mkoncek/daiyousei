@@ -72,11 +72,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* const* argv)
 		return client.error().first;
 	}
 	
-	std::cout << serializer.get() << "\n";
-	
 	if (auto sent = client->send(serializer.take()); not sent)
 	{
-		std::clog << "daiyousei: " << sent.error().second << "\n";
+		std::clog << program_name << ": " << sent.error().second << "\n";
 		return sent.error().first;
 	}
 	

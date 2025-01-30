@@ -37,17 +37,16 @@ struct Client
 	
 	static void checked_close(int fd)
 	{
-		std::clog << "closing file descriptor " << fd << "\n";
-		
 		if (close(fd))
 		{
 			std::clog << "failed to close file descriptor " << fd << ": " << std::strerror(errno) << "\n";
 		}
 	}
 	
-	static std::expected<std::size_t, std::error_code> read_into(int fd, std::string& output)
+	static std::pair<std::size_t, std::error_code> read_into(int fd, std::string& output)
 	{
 		auto total_read_bytes = std::size_t(0);
+		auto error = std::error_code();
 		
 		while (true)
 		{
@@ -57,13 +56,15 @@ struct Client
 			
 			if (read_bytes == -1)
 			{
+				read_bytes = 0;
+				
 				if (errno == EWOULDBLOCK or errno == EAGAIN)
 				{
-					read_bytes = 0;
+					// ignore
 				}
 				else
 				{
-					return std::unexpected(std::make_error_code(std::errc(errno)));
+					error = std::make_error_code(std::errc(errno));
 				}
 			}
 			
@@ -77,7 +78,7 @@ struct Client
 			}
 		}
 		
-		return total_read_bytes;
+		return std::pair(total_read_bytes, error);
 	}
 	
 	static std::expected<Client, std::pair<int, std::string>> create(Arguments args)
@@ -153,9 +154,6 @@ struct Client
 	
 	std::expected<void, std::pair<int, std::string>> handle_list(bencode::deserialized::List& list)
 	{
-		std::cout << "handle list" << "\n";
-		std::cout << list.size() << "\n";
-		
 		for (std::size_t i = 0; i + 1 < list.size(); i += 2)
 		{
 			auto key = std::string_view();
@@ -244,17 +242,16 @@ struct Client
 			auto ready_events = epoll_wait(epoll_fd_.get(), events.data(), events.size(), -1);
 			for (int i = 0; i != ready_events; ++i)
 			{
-				std::cout << "## " << events[i].events << "\n";
-				std::cout << i << "\n";
 				if (events[i].data.fd == 0)
 				{
-					if (auto rresult = read_into(events[i].data.fd, input); not rresult)
+					if (auto [rresult, rerror] = read_into(events[i].data.fd, input); rerror)
 					{
-						return std::unexpected(std::pair(255, rresult.error().message()));
+						return std::unexpected(std::pair(255, rerror.message()));
 					}
 					
 					if (input.size() != 0)
 					{
+						serializer_.push_byte_string("stdin");
 						serializer_.push_byte_string(input);
 						input.clear();
 						
@@ -264,12 +261,17 @@ struct Client
 						}
 					}
 				}
-				else if (auto rresult = read_into(events[i].data.fd, deserializer.data_))
+				else
 				{
-					std::cout << "|| " << deserializer.data_.size() << "\n";
-					if (rresult.value() == 0)
+					auto [rresult, rerror] = read_into(events[i].data.fd, deserializer.data_);
+					
+					if (rerror)
 					{
-						std::clog << "input stream " << events[i].data.fd << " closed"  << "\n";
+						return std::unexpected(std::pair(255, rerror.message()));
+					}
+					
+					if (rresult == 0)
+					{
 						input_available = false;
 					}
 					
@@ -280,6 +282,7 @@ struct Client
 						if (dresult)
 						{
 							list = &dresult.value().get_list();
+							input_available = false;
 						}
 						else if (dresult.error() == bencode::Deserialization_error::incomplete_message)
 						{
@@ -294,15 +297,14 @@ struct Client
 						{
 							return std::unexpected(result.error());
 						}
-						std::cout << list->size() << "\n";
 					}
 				}
-				else
-				{
-					// Read error
-					return std::unexpected(std::pair(255, rresult.error().message()));
-				}
 			}
+		}
+		
+		if (auto result = shutdown(socket_.get(), SHUT_WR); result == -1)
+		{
+			return std::unexpected(std::pair(255, std::string("socket shutdown failed: ") + std::strerror(errno)));
 		}
 		
 		if (exitcode_)
