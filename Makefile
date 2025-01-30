@@ -8,10 +8,9 @@ CXXFLAGS += -std=c++23 -Isrc
 Dependency_file = $(addprefix target/dependencies/,$(addsuffix .mk,$(subst /,.,$(basename $(1)))))
 Object_file = $(addprefix target/object_files/,$(addsuffix .o,$(subst /,.,$(basename $(1)))))
 
-.PHONY: clean compile test-serialization test-deserialization test-unit test-server coverage
+.PHONY: clean compile test-compile test-serialization test-deserialization test-unit test-server coverage
 
 compile: target/bin/daiyousei
-	@./$<
 
 %/:
 	@mkdir -p $@
@@ -22,14 +21,16 @@ clean:
 target/bin/%: | target/bin/
 	$(CXX) -o $@ $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(LDLIBS) $<
 
+$(call Object_file,%): src/%.cpp | target/object_files/ target/dependencies/
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -MF $(call Dependency_file,$(<F)) -MT $(call Object_file,$(<F)) -c -o $(call Object_file,$(<F)) $(addprefix src/,$(<F))
+
+test-compile: compile target/bin/test_bencode_serialization target/bin/test_bencode_deserialization
+
 target/bin/test_%: CPPFLAGS += -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
 target/bin/test_%: LDFLAGS += -Ltarget/lib
 target/bin/test_%: LDLIBS += -ltesting
 target/bin/test_bencode_serialization: test/bencode_serialization.cpp src/bencode.hpp target/lib/libtesting.a
 target/bin/test_bencode_deserialization: test/bencode_deserialization.cpp src/bencode.hpp target/lib/libtesting.a
-
-$(call Object_file,%): src/%.cpp | target/object_files/ target/dependencies/
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -MF $(call Dependency_file,$(<F)) -MT $(call Object_file,$(<F)) -c -o $(call Object_file,$(<F)) $(addprefix src/,$(<F))
 
 target/lib/libtesting.a: $(call Object_file,testing.cpp) | target/lib/
 	$(AR) -rcs $@ $<
