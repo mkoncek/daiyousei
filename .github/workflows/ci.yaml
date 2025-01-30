@@ -20,16 +20,16 @@ jobs:
       - name: Install dependencies
         run: |
           dnf -y install epel-release
-          dnf -y install diffutils gcc-toolset-12-gcc-c++ gcc-toolset-12-libasan-devel gcc-toolset-12-libubsan-devel make rubygem-asciidoctor
+          dnf -y install diffutils gcc-toolset-13-gcc-c++ gcc-toolset-13-libasan-devel gcc-toolset-13-libubsan-devel make rubygem-asciidoctor
       - name: Compile
         run: |
-          source /opt/rh/gcc-toolset-12/enable
+          source /opt/rh/gcc-toolset-13/enable
           make -j8 compile
       - name: Run unit tests
         run: |
-          source /opt/rh/gcc-toolset-12/enable
+          source /opt/rh/gcc-toolset-13/enable
           make test-unit
       - name: Run integration tests
         run: |
-          source /opt/rh/gcc-toolset-12/enable
+          source /opt/rh/gcc-toolset-13/enable
           make test-server
