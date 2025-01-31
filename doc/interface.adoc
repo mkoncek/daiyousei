@@ -43,6 +43,6 @@ The server sends the following data to the client.
 |`exitcode`|`Integer`|Exit code
 |===
 
-Standard outputs are streamed in chunks and can be interleaved in repeated.
+Standard outputs are streamed in chunks and can be interleaved and repeated.
 The exit code value will be returned by the client unless a different error is encountered by the client.
 The server can still continue to communicate after sending the exit code and must still properly terminate the communication.
