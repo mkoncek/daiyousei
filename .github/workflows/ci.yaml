@@ -31,9 +31,8 @@ jobs:
           source /opt/rh/gcc-toolset-13/enable
           source /opt/rh/make*/enable
           make test-unit
-      # NOTE disabled because times out
-      # - name: Run integration tests
-      #   run: |
-      #     source /opt/rh/gcc-toolset-13/enable
-      #     source /opt/rh/make*/enable
-      #     make test-server
+      - name: Run integration tests
+        run: |
+          source /opt/rh/gcc-toolset-13/enable
+          source /opt/rh/make*/enable
+          make test-server
