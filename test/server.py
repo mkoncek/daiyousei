@@ -38,52 +38,42 @@ def run_client():
 
 class Test_Simple(unittest.TestCase):
 	def test_exit_immediately_zero(self):
-		with setup() as server:
-			with run_client() as client:
-				with server.accept()[0] as conn:
-					consume(conn)
-					conn.send(b"l8:exitcodei0ee")
-				self.assertEqual(0, client.wait())
+		with setup() as server, run_client() as client, server.accept()[0] as conn:
+			consume(conn)
+			conn.send(b"l8:exitcodei0ee")
+			self.assertEqual(0, client.wait())
 	
 	def test_exit_immediately_nonzero(self):
-		with setup() as server:
-			with run_client() as client:
-				with server.accept()[0] as conn:
-					consume(conn)
-					conn.send(b"l8:exitcodei66ee")
-				self.assertEqual(66, client.wait())
+		with setup() as server, run_client() as client, server.accept()[0] as conn:
+			consume(conn)
+			conn.send(b"l8:exitcodei66ee")
+			self.assertEqual(66, client.wait())
 	
 	def test_passing_stdin(self):
-		with setup() as server:
-			with run_client() as client:
-				with server.accept()[0] as conn:
-					consume(conn)
-					client.stdin.write(b"some input")
-					client.stdin.flush()
-					data = conn.recv(512)
-					self.assertEqual(b"5:stdin10:some input", data)
-					conn.send(b"l8:exitcodei0ee")
-				self.assertEqual(0, client.wait())
+		with setup() as server, run_client() as client, server.accept()[0] as conn:
+			consume(conn)
+			client.stdin.write(b"some input")
+			client.stdin.flush()
+			data = conn.recv(512)
+			self.assertEqual(b"5:stdin10:some input", data)
+			conn.send(b"l8:exitcodei0ee")
+			self.assertEqual(0, client.wait())
 	
 	def test_passing_stdout(self):
-		with setup() as server:
-			with run_client() as client:
-				with server.accept()[0] as conn:
-					consume(conn)
-					conn.send(b"l6:stdout11:some output8:exitcodei0ee")
-					stdout = client.stdout.read()
-					self.assertEqual(b"some output", stdout)
-				self.assertEqual(0, client.wait())
+		with setup() as server, run_client() as client, server.accept()[0] as conn:
+			consume(conn)
+			conn.send(b"l6:stdout11:some output8:exitcodei0ee")
+			stdout = client.stdout.read()
+			self.assertEqual(b"some output", stdout)
+			self.assertEqual(0, client.wait())
 	
 	def test_passing_stderr(self):
-		with setup() as server:
-			with run_client() as client:
-				with server.accept()[0] as conn:
-					consume(conn)
-					conn.send(b"l6:stderr10:some error8:exitcodei0ee")
-					stderr = client.stderr.read()
-					self.assertEqual(b"some error", stderr)
-				self.assertEqual(0, client.wait())
+		with setup() as server, run_client() as client, server.accept()[0] as conn:
+			consume(conn)
+			conn.send(b"l6:stderr10:some error8:exitcodei0ee")
+			stderr = client.stderr.read()
+			self.assertEqual(b"some error", stderr)
+			self.assertEqual(0, client.wait())
 
 try:
 	unittest.main()
