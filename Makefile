@@ -1,6 +1,6 @@
 MAKEFLAGS += -r
 
-CXXFLAGS ?= -g -Wall -Wextra -Wpedantic -fsanitize=undefined,address
+CXXFLAGS ?= -g -Wall -Wextra -Wpedantic -fsanitize=undefined,address -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
 LDFLAGS ?= -fsanitize=undefined,address
 
 CXXFLAGS += -std=c++23 -Isrc
@@ -26,7 +26,6 @@ $(call Object_file,%): src/%.cpp | target/object_files/ target/dependencies/
 
 test-compile: compile target/bin/test_bencode_serialization target/bin/test_bencode_deserialization
 
-target/bin/test_%: CPPFLAGS += -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
 target/bin/test_%: LDFLAGS += -Ltarget/lib
 target/bin/test_%: LDLIBS += -ltesting
 target/bin/test_bencode_serialization: test/bencode_serialization.cpp src/bencode.hpp target/lib/libtesting.a

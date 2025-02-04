@@ -18,7 +18,7 @@ struct Arguments : std::span<const char* const>
 	{
 		std::size_t pos_eq = 0;
 		
-		while (arg[pos_eq] != '\0' and arg[pos_eq] != '=')
+		while (pos_eq != arg.size() and arg[pos_eq] != '=')
 		{
 			++pos_eq;
 		}
