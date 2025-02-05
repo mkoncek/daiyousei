@@ -1,24 +1,20 @@
 name: Documentation
-
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 jobs:
-  adoc_build:
+  build:
     runs-on: ubuntu-latest
-    name: Build documentation
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Get build container
-        id: adocbuild
-        uses: tonynv/asciidoctor-action@master
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get install -y asciidoctor
+      - name: Build page
+        run: |
+          asciidoctor -D public -o index.html README.adoc
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          program: "asciidoctor -D docs -o index.html README.adoc"
-      - name: Deploy docs to gh-pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
-          publish_branch: gh-pages
-          publish_dir: ./
+          branch: gh-pages
+          folder: public
