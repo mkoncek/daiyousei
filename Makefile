@@ -41,8 +41,8 @@ test-serialization: target/bin/test_bencode_serialization
 test-deserialization: target/bin/test_bencode_deserialization
 	@./$<
 
-target/doc/interface.html: doc/interface.adoc | target/doc/
-	asciidoctor -D target/doc $<
+target/doc/README.html: README.adoc | target/doc/
+	@asciidoctor -D target/doc $<
 
 test-unit: test-serialization test-deserialization
 
@@ -51,7 +51,7 @@ test-server: test/server.py target/bin/daiyousei
 
 coverage: CXXFLAGS += --coverage -fno-elide-constructors -fno-default-inline
 coverage: LDFLAGS += --coverage
-coverage: test | target/coverage/
+coverage: test-unit test-server | target/coverage/
 	@lcov --ignore-errors mismatch --output-file target/coverage.info --directory target/bin --capture --exclude '/usr/include/*' --exclude 'testing.hpp'
 	@genhtml -o target/coverage target/coverage.info
 

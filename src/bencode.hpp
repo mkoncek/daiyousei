@@ -222,6 +222,11 @@ struct Serializer : std::reference_wrapper<std::string>
 	
 	inline static Serializer_buffer create() noexcept;
 	
+	void push_raw_data(std::string_view data)
+	{
+		get() += data;
+	}
+	
 	void push_integer(bencode::Integer value)
 	{
 		return serialize(get(), value);
@@ -244,19 +249,6 @@ struct Serializer : std::reference_wrapper<std::string>
 	struct Dictionary_serializer;
 	
 	inline Dictionary_serializer push_dictionary();
-};
-
-struct Serializer::Serializer_buffer : Serializer
-{
-	std::string buffer_;
-	
-	Serializer_buffer() noexcept : Serializer(buffer_)
-	{
-	}
-	
-	Serializer_buffer(Serializer_buffer&&) : Serializer(buffer_)
-	{
-	}
 	
 	struct Take : std::reference_wrapper<std::string>
 	{
@@ -274,6 +266,19 @@ struct Serializer::Serializer_buffer : Serializer
 	Take take() noexcept
 	{
 		return Take(*this);
+	}
+};
+
+struct Serializer::Serializer_buffer : Serializer
+{
+	std::string buffer_;
+	
+	Serializer_buffer() noexcept : Serializer(buffer_)
+	{
+	}
+	
+	Serializer_buffer(Serializer_buffer&&) : Serializer(buffer_)
+	{
 	}
 };
 
@@ -368,18 +373,18 @@ struct Integer : Deserializable
 
 struct Byte_string : Deserializable, std::string
 {
-	std::size_t complete_size = 0;
+	std::size_t complete_size_ = 0;
 	
 	operator std::string_view() const noexcept
 	{
 		return std::string_view(static_cast<const std::string&>(*this));
 	}
 	
-	bool is_complete() const noexcept final override {return complete_size == this->size();}
+	bool is_complete() const noexcept final override {return complete_size_ == this->size();}
 	
 	std::size_t remaining() const noexcept
 	{
-		return size() - complete_size;
+		return size() - complete_size_;
 	}
 	
 	std::expected<void, Deserialization_error> append(std::vector<Deserializable*>& stack, std::string_view value) final override;
@@ -575,10 +580,10 @@ struct deserialized::Field : Deserializable
 std::expected<void, Deserialization_error> deserialized::Byte_string::append(
 	[[maybe_unused]] std::vector<Deserializable*>& stack, std::string_view value)
 {
-	if (value.size() <= size() - complete_size)
+	if (value.size() <= size() - complete_size_)
 	{
-		std::ranges::copy(value, data() + complete_size);
-		complete_size += value.size();
+		std::ranges::copy(value, data() + complete_size_);
+		complete_size_ += value.size();
 		return {};
 	}
 	
@@ -797,6 +802,8 @@ struct Deserializer
 				return std::unexpected(Deserialization_error::incomplete_message);
 			}
 			
+			// std::cout << "DATA: " << data_ << "| END OF DATA\n";
+			
 			if (not stack_.empty())
 			{
 				auto& ref_type = typeid(*stack_.back());
@@ -821,6 +828,7 @@ struct Deserializer
 				{
 					auto* string = static_cast<deserialized::Byte_string*>(stack_.back());
 					auto len = std::min(string->remaining(), data_.size());
+					// std::cout << "len: " << len << "\n";
 					if (auto result = string->append(stack_, std::string_view(data_.data(), len)); not result)
 					{
 						return std::unexpected(result.error());
@@ -874,6 +882,7 @@ struct Deserializer
 				}
 				++end;
 				consume(end);
+				// std::cout << "after consuming string prefix: " << data_ << "\n";
 				if (auto result = consume_value(std::move(byte_string)); not result)
 				{
 					return std::unexpected(result.error());
@@ -898,6 +907,160 @@ struct Deserializer
 			else
 			{
 				return std::unexpected(Deserialization_error::unknown_type);
+			}
+		}
+	}
+};
+
+struct Deserialization_exception : std::runtime_error
+{
+	using std::runtime_error::runtime_error;
+};
+
+struct Streaming_deserializer
+{
+protected:
+	std::string data_;
+private:
+	std::optional<std::size_t> expected_byte_string_length_;
+	std::string stack_;
+	
+	void consume(std::size_t size)
+	{
+		std::copy(data_.begin() + size, data_.end(), data_.begin());
+		data_.resize(data_.size() - size);
+	}
+	
+	virtual void visit_integer([[maybe_unused]] bencode::Integer value) {}
+	
+	virtual void visit_byte_string([[maybe_unused]] std::string_view value) {}
+	
+	virtual void visit_list_begin() {}
+	virtual void visit_list_end() {}
+	
+	virtual void visit_dictionary_begin() {}
+	virtual void visit_dictionary_field() {} // TODO
+	virtual void visit_dictionary_end() {}
+	
+public:
+	virtual ~Streaming_deserializer() = default;
+	
+	void receive(std::string_view data)
+	{
+		data_.append(data);
+		receive();
+	}
+	
+	void receive()
+	{
+		while (true)
+		{
+			if (data_.empty())
+			{
+				break;
+			}
+			
+			if (expected_byte_string_length_)
+			{
+				if (data_.size() >= *expected_byte_string_length_)
+				{
+					visit_byte_string(std::string_view(data_.data(), *expected_byte_string_length_));
+					consume(*expected_byte_string_length_);
+					expected_byte_string_length_.reset();
+					continue;
+				}
+				else
+				{
+					// wait for more data
+					break;
+				}
+			}
+			
+			if (data_[0] == 'i')
+			{
+				auto end = data_.find_first_of('e');
+				if (end == std::string::npos)
+				{
+					// wait for more data
+					break;
+				}
+				auto integer = bencode::Integer();
+				auto [ptr, error] = std::from_chars(data_.data() + 1, data_.data() + end, integer);
+				++end;
+				if (auto ec = std::make_error_code(error))
+				{
+					throw Deserialization_exception(std::string("invalid integer value: '") + data_.substr(0, end) + "':" + ec.message());
+				}
+				consume(end);
+				visit_integer(integer);
+			}
+			else if (std::isdigit(data_[0]))
+			{
+				auto end = data_.find_first_of(':');
+				if (end == std::string::npos)
+				{
+					// wait for more data
+					break;
+				}
+				std::ptrdiff_t len;
+				auto [ptr, error] = std::from_chars(data_.data(), data_.data() + end, len);
+				++end;
+				if (auto ec = std::make_error_code(error))
+				{
+					throw Deserialization_exception(std::string("invalid byte string length: '") + data_.substr(0, end) + "':" + ec.message());
+				}
+				if (len < 0)
+				{
+					throw Deserialization_exception(std::string("negative byte string length: '") + data_.substr(0, end) + "'");
+				}
+				if (len > 1024 * 1024)
+				{
+					throw Deserialization_exception(std::string("byte string length too large: '") + data_.substr(0, end) + "'");
+				}
+				if (data_.size() >= end + len)
+				{
+					visit_byte_string(std::string_view(data_.data() + end, len));
+					end += len;
+				}
+				else
+				{
+					expected_byte_string_length_.emplace(len);
+				}
+				consume(end);
+			}
+			else if (data_[0] == 'l')
+			{
+				consume(1);
+				stack_ += 'l';
+				visit_list_begin();
+			}
+			else if (data_[0] == 'd')
+			{
+				consume(1);
+				stack_ += 'd';
+				visit_dictionary_begin();
+			}
+			else if (data_[0] == 'e')
+			{
+				consume(1);
+				if (stack_.ends_with('l'))
+				{
+					stack_.resize(stack_.size() - 1);
+					visit_list_end();
+				}
+				else if (stack_.ends_with('d'))
+				{
+					stack_.resize(stack_.size() - 1);
+					visit_dictionary_end();
+				}
+				else
+				{
+					throw Deserialization_exception(std::string("found end of collection 'e' with no previous beginning"));
+				}
+			}
+			else
+			{
+				throw Deserialization_exception(std::string("unknown value type: '") + data_ + "'");
 			}
 		}
 	}
