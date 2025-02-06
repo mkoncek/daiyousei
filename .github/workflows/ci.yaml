@@ -11,9 +11,8 @@ jobs:
     container: quay.io/centos/centos:stream9
     env:
       CXX: g++
-      CPPFLAGS: -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
-      CXXFLAGS: -Werror -g -Wall -Wextra -Wpedantic -pthread -fsanitize=undefined,address
-      LDFLAGS: -pthread -fsanitize=address,undefined
+      CXXFLAGS: -Werror -g -Wall -Wextra -Wpedantic -fsanitize=undefined,address -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
+      LDFLAGS: -fsanitize=address,undefined
     steps:
       - name: Checkout git repository
         uses: actions/checkout@v4

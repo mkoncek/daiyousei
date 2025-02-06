@@ -6,6 +6,25 @@
 
 TODO.
 
+== Building
+The project is written in C{plus}{plus} and requires a C{plus}{plus} compiler supporting the language version 23.
+Build instructions are managed in the `Makefile`.
+
+Build the project by running:
+----
+make compile
+----
+
+Run unit tests also written in C{plus}{plus}:
+----
+make test-unit
+----
+
+Run tests using a server written in Python:
+----
+make test-server
+----
+
 == Running
 When the program starts, the communication channel needs to be already created and the server needs to be listening for connections.
 The client and server then communicate and after the communication is finished.
@@ -45,41 +64,76 @@ The Unix socket file path used for communication is selected using the following
 === Protocol
 The communication protocol used by the communicating parties as follows.
 
-==== From client to server
+==== Client to server
 When the client starts, it immediately sends its command-line arguments, current working directory and the environment variables over the communication channel.
 Standard input is sent in chunks as the program receives it.
 When the standard input is closed on the client side, it sends the closing end of the list and closes the connection.
 
-.BNF notation of the client-to-server communication protocol
+[cols = "1a,1a"]
+[frame = "none"]
+[grid = "cols"]
+[%autowidth]
+|===
+|.BNF notation, client-to-server protocol
 [cols = ">1,^1,1"]
 [frame = "all"]
 [grid = "rows"]
 [%autowidth]
-|===
-|`Request`|`::=`|`"l"` `Argv` `Cwd` `Env` `Stdin` `"e"`
-|`Argv`|`::=`|`"4:argv"` `"l"` `Args` `"e"`
-|`Args`|`::=`|`Ben-string`
-|`Args`|`::=`|`Args` `Ben-string`
-|`Cwd`|`::=`|`"3:cwd"` `Ben-string`
-|`Env`|`::=`|`"3:env"` `"l"` `Pairs` `"e"`
-|`Pairs`|`::=`|
-|`Pairs`|`::=`|`Pairs` `Ben-string` `Ben-string`
-|`Stdin`|`::=`|
-|`Stdin`|`::=`|`Stdin` `"5:stdin"` `Ben-string`
+!===
+!`Request`!`::=`!`"l" Argv Cwd Env Stdin "e"`
+!`Argv`!`::=`!`"4:argv" "l" Args "e"`
+!`Args`!`::=`!`Ben-string`
+!`Args`!`::=`!`Args Ben-string`
+!`Cwd`!`::=`!`"3:cwd" Ben-string`
+!`Env`!`::=`!`"3:env" "l" Pairs "e"`
+!`Pairs`!`::=`!
+!`Pairs`!`::=`!`Pairs Ben-string Ben-string`
+!`Stdin`!`::=`!
+!`Stdin`!`::=`!`Stdin "5:stdin" Ben-string`
+!===
+|.EBNF notation, client-to-server protocol
+[cols = ">1,^1,1"]
+[frame = "all"]
+[grid = "rows"]
+[%autowidth]
+!===
+!`request`!`=`!`"l", argv, cwd, env, {stdin}, "e";`
+!`argv`!`=`!`"4:argv", "l", {ben-string}, "e";`
+!`cwd`!`=`!`"3:cwd", ben-string;`
+!`env`!`=`!`"3:env", "l", {ben-string, ben-string} "e";`
+!`stdin`!`=`!`"5:stdin", ben-string;`
+!===
 |===
 
-==== From server to client
+==== Server to client
 The server communicates by sending its outputs in chunks and the exit code as the last value.
 The exit code is returned by the client program unless it encounters a different error.
 
-.BNF notation of the server-to-client communication protocol
+[cols = "1a,1a"]
+[frame = "none"]
+[grid = "cols"]
+[%autowidth]
+|===
+|.BNF notation, server-to-client protocol
 [cols = ">1,^1,1"]
 [frame = "all"]
 [grid = "rows"]
 [%autowidth]
-|===
-|`Response`|`::=`|`"l"` `Chunk` `Exit` `"e"`
-|`Chunk`|`::=`|`"6:stdout"` `Ben-string`
-|`Chunk`|`::=`|`"6:stderr"` `Ben-string`
-|`Exit`|`::=`|`"8:exitcode"` `Ben-integer`
+!===
+!`Response`!`::=`!`"l" Chunk Exit "e"`
+!`Chunk`!`::=`!`"6:stdout" Ben-string`
+!`Chunk`!`::=`!`"6:stderr" Ben-string`
+!`Exit`!`::=`!`"8:exitcode" Ben-integer`
+!===
+|.EBNF notation, server-to-client protocol
+[cols = ">1,^1,1"]
+[frame = "all"]
+[grid = "rows"]
+[%autowidth]
+!===
+!`response`!`=`!`"l", {stdout \| stderr}, exitcode, "e";`
+!`stdout`!`=`!`"6:stdout", ben-string;`
+!`stderr`!`=`!`"6:stderr", ben-string;`
+!`exitcode`!`=`!`"8:exitcode", ben-integer;`
+!===
 |===

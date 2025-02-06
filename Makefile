@@ -1,14 +1,12 @@
 MAKEFLAGS += -r
 
-CXXFLAGS ?= -g -Wall -Wextra -Wpedantic -fsanitize=undefined,address -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
-LDFLAGS ?= -fsanitize=undefined,address
-
+CXXFLAGS ?= -g -Wall -Wextra -Wpedantic
 CXXFLAGS += -std=c++23 -Isrc
 
 Dependency_file = $(addprefix target/dependencies/,$(addsuffix .mk,$(subst /,.,$(basename $(1)))))
 Object_file = $(addprefix target/object_files/,$(addsuffix .o,$(subst /,.,$(basename $(1)))))
 
-.PHONY: clean compile test-compile test-serialization test-deserialization test-unit test-server coverage
+.PHONY: clean compile test-compile test-serialization test-deserialization test-streaming-deserialization test-unit test-server coverage
 
 compile: target/bin/daiyousei
 
@@ -27,8 +25,6 @@ target/bin/%: | target/bin/
 
 $(call Object_file,%): src/%.cpp | target/object_files/ target/dependencies/
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -MF $(call Dependency_file,$(<F)) -MT $(call Object_file,$(<F)) -c -o $(call Object_file,$(<F)) $(addprefix src/,$(<F))
-
-test-compile: compile target/bin/test_bencode_serialization target/bin/test_bencode_deserialization
 
 target/bin/test_%: LDFLAGS += -Ltarget/lib
 target/bin/test_%: LDLIBS += -ltesting
@@ -51,9 +47,13 @@ test-streaming-deserialization: target/bin/test_bencode_streaming_deserializatio
 target/doc/daiyousei.html: doc/daiyousei.adoc | target/doc/
 	@asciidoctor -D target/doc $<
 
-test-unit: test-serialization test-deserialization test-streaming-deserialization
+test-compile: CXXFLAGS += -fsanitize=undefined,address -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
+test-compile: LDFLAGS += -fsanitize=undefined,address
+test-compile: compile target/bin/test_bencode_serialization target/bin/test_bencode_deserialization target/bin/test_bencode_streaming_deserialization
 
-test-server: test/server.py target/bin/daiyousei
+test-unit: test-compile test-serialization test-deserialization test-streaming-deserialization
+
+test-server: test/server.py test-compile target/bin/daiyousei
 	@./$<
 
 coverage: CXXFLAGS += --coverage -fno-elide-constructors -fno-default-inline
