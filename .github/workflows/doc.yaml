@@ -12,7 +12,7 @@ jobs:
         run: sudo apt-get install -y asciidoctor
       - name: Build page
         run: |
-          asciidoctor -D public -o index.html README.adoc
+          asciidoctor -D public -o index.html doc/daiyousei.adoc
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:

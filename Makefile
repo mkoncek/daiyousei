@@ -41,7 +41,7 @@ test-serialization: target/bin/test_bencode_serialization
 test-deserialization: target/bin/test_bencode_deserialization
 	@./$<
 
-target/doc/README.html: README.adoc | target/doc/
+target/doc/daiyousei.html: doc/daiyousei.adoc | target/doc/
 	@asciidoctor -D target/doc $<
 
 test-unit: test-serialization test-deserialization

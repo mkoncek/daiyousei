@@ -1,6 +1,6 @@
 [.text-justify]
 = Daiyousei
-
+:toc: left
 :source-highlighter: rouge
 :table-caption!:
 
@@ -16,7 +16,7 @@ In case of an internal error, the programs attempts to return the value `255`, t
 === Command-line arguments
 The tool does not use any command-line arguments.
 All arguments are passed over the communication channel.
-The tool requires the first argument, i.e. the executable name, also known as `argv[0]` to be valid.
+The tool requires the first argument, i.e. the executable name, also known as `argv[0]`, to be valid.
 
 === Environment variables
 The tool can be configured using the following environment variables.
