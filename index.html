@@ -439,10 +439,9 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
 <ul class="sectlevel1">
-<li><a href="#_building">Building</a></li>
 <li><a href="#_running">Running</a>
 <ul class="sectlevel2">
-<li><a href="#_command_line_arguments">Command-line arguments</a></li>
+<li><a href="#_options">Options</a></li>
 <li><a href="#_environment_variables">Environment variables</a></li>
 </ul>
 </li>
@@ -450,6 +449,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <ul class="sectlevel2">
 <li><a href="#_socket_path">Socket path</a></li>
 <li><a href="#_protocol">Protocol</a></li>
+<li><a href="#_termination">Termination</a></li>
 </ul>
 </li>
 </ul>
@@ -459,40 +459,13 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <div id="preamble">
 <div class="sectionbody">
 <div class="paragraph">
-<p>TODO.</p>
-</div>
-</div>
-</div>
-<div class="sect1">
-<h2 id="_building">Building</h2>
-<div class="sectionbody">
-<div class="paragraph">
-<p>The project is written in C&#43;&#43; and requires a C&#43;&#43; compiler supporting the language version 23.
-Build instructions are managed in the <code>Makefile</code>.</p>
+<p>A lightweight intermediary for running processes.</p>
 </div>
 <div class="paragraph">
-<p>Build the project by running:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>make compile</pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Run unit tests also written in C&#43;&#43;:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>make test-unit</pre>
-</div>
-</div>
-<div class="paragraph">
-<p>Run tests using a server written in Python:</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre>make test-server</pre>
-</div>
+<p>Daiyousei is a lightweight program the purpose of which is act as a different process.
+Upon starting, it connects to a running, listening program, referred to as <em>server</em>, via a socket.
+Then daiyousei, in this context the <em>client</em>, transparently sends and receives fundamental runtime execution data.
+The data include the environment context, arguments, standard input / output streams and the exit code.</p>
 </div>
 </div>
 </div>
@@ -508,7 +481,7 @@ The client and server then communicate and after the communication is finished.<
 In case of an internal error, the programs attempts to return the value <code>255</code>, though this may not be guaranteed.</p>
 </div>
 <div class="sect2">
-<h3 id="_command_line_arguments">Command-line arguments</h3>
+<h3 id="_options">Options</h3>
 <div class="paragraph">
 <p>The tool does not use any command-line arguments.
 All arguments are passed over the communication channel.
@@ -518,7 +491,7 @@ The tool requires the first argument, i.e. the executable name, also known as <c
 <div class="sect2">
 <h3 id="_environment_variables">Environment variables</h3>
 <div class="paragraph">
-<p>The tool can be configured using the following environment variables.</p>
+<p>The tool can be configured using the following environment variables:</p>
 </div>
 <table class="tableblock frame-all grid-all fit-content">
 <colgroup>
@@ -553,7 +526,10 @@ The list contains key-value pairs, similar to a dictionary but the keys can be r
 <div class="sect2">
 <h3 id="_socket_path">Socket path</h3>
 <div class="paragraph">
-<p>The Unix socket file path used for communication is selected using the following procedure.</p>
+<p>Currently only Unix domain stream socket communication is supported.</p>
+</div>
+<div class="paragraph">
+<p>The Unix socket file path used for communication is selected using the following procedure:</p>
 </div>
 <div class="ulist">
 <ul>
@@ -561,10 +537,10 @@ The list contains key-value pairs, similar to a dictionary but the keys can be r
 <p>If the variable <code>DAIYOUSEI_UNIX_SOCKET</code> is defined, it is used.</p>
 </li>
 <li>
-<p>Otherwise if <code>XDG_RUNTIME_DIR</code> is defined, the socket <code>daiyousei.sock</code> is created inside the directory.</p>
+<p>Otherwise if <code>XDG_RUNTIME_DIR</code> is defined, the socket <code>daiyousei.sock</code> inside the directory is used.</p>
 </li>
 <li>
-<p>Otherwise the socket is created inside <code>/tmp</code>.</p>
+<p>Otherwise the socket <code>daiyousei.sock</code> inside the <code>/tmp</code> directory is used.</p>
 </li>
 </ul>
 </div>
@@ -597,59 +573,59 @@ When the standard input is closed on the client side, it sends the closing end o
 </colgroup>
 <tbody>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Request</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Request</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"l" Argv Cwd Env Stdin "e"</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"l"</span> <span class="green">Argv</span> <span class="green">Cwd</span> <span class="green">Env</span> <span class="green">Stdin</span> <span class="red">"e"</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Argv</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Argv</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"4:argv" "l" Args "e"</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"4:argv"</span> <span class="red">"l"</span> <span class="green">Args</span> <span class="red">"e"</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Args</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Args</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>Ben-string</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="green">Ben-string</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Args</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Args</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>Args Ben-string</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="green">Args</span> <span class="green">Ben-string</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Cwd</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Cwd</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"3:cwd" Ben-string</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"3:cwd"</span> <span class="green">Ben-string</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Env</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Env</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"3:env" "l" Pairs "e"</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"3:env"</span> <span class="red">"l"</span> <span class="green">Pairs</span> <span class="red">"e"</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Pairs</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Pairs</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Pairs</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Pairs</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>Pairs Ben-string Ben-string</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="green">Pairs</span> <span class="green">Ben-string</span> <span class="green">Ben-string</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Stdin</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Stdin</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Stdin</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Stdin</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>Stdin "5:stdin" Ben-string</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="green">Stdin</span> <span class="red">"5:stdin"</span> <span class="green">Ben-string</span></code></p></td>
 </tr>
 </tbody>
 </table></div></td>
 <td class="tableblock halign-left valign-top"><div class="content"><table class="tableblock frame-all grid-rows fit-content">
-<caption class="title">EBNF notation, client-to-server protocol</caption>
+<caption class="title">Extended BNF notation, client-to-server protocol</caption>
 <colgroup>
 <col>
 <col>
@@ -657,29 +633,29 @@ When the standard input is closed on the client side, it sends the closing end o
 </colgroup>
 <tbody>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>request</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">request</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"l", argv, cwd, env, {stdin}, "e";</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"l"</span>, <span class="green">argv</span>, <span class="green">cwd</span>, <span class="green">env</span>, { <span class="green">stdin</span> }, <span class="red">"e"</span>;</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>argv</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">argv</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"4:argv", "l", {ben-string}, "e";</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"4:argv"</span>, <span class="red">"l"</span>, { <span class="green">ben-string</span> }, <span class="red">"e"</span>;</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>cwd</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">cwd</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"3:cwd", ben-string;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"3:cwd"</span>, <span class="green">ben-string</span>;</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>env</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">env</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"3:env", "l", {ben-string, ben-string} "e";</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"3:env"</span>, <span class="red">"l"</span>, { <span class="green">ben-string</span>, <span class="green">ben-string</span> }, <span class="red">"e"</span>;</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>stdin</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">stdin</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"5:stdin", ben-string;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"5:stdin"</span>, <span class="green">ben-string</span>;</code></p></td>
 </tr>
 </tbody>
 </table></div></td>
@@ -709,29 +685,29 @@ The exit code is returned by the client program unless it encounters a different
 </colgroup>
 <tbody>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Response</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Response</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"l" Chunk Exit "e"</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"l"</span> <span class="green">Chunk</span> <span class="green">Exit</span> <span class="red">"e"</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Chunk</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Chunk</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"6:stdout" Ben-string</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"6:stdout"</span> <span class="green">Ben-string</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Chunk</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Chunk</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"6:stderr" Ben-string</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"6:stderr"</span> <span class="green">Ben-string</span></code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>Exit</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">Exit</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>::=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"8:exitcode" Ben-integer</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"8:exitcode"</span> <span class="green">Ben-integer</span></code></p></td>
 </tr>
 </tbody>
 </table></div></td>
 <td class="tableblock halign-left valign-top"><div class="content"><table class="tableblock frame-all grid-rows fit-content">
-<caption class="title">EBNF notation, server-to-client protocol</caption>
+<caption class="title">Extended BNF notation, server-to-client protocol</caption>
 <colgroup>
 <col>
 <col>
@@ -739,24 +715,24 @@ The exit code is returned by the client program unless it encounters a different
 </colgroup>
 <tbody>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>response</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">response</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"l", {stdout | stderr}, exitcode, "e";</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"l"</span>, { <span class="green">stdout</span> | <span class="green">stderr</span> }, <span class="green">exitcode</span>, <span class="red">"e"</span>;</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>stdout</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">stdout</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"6:stdout", ben-string;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"6:stdout"</span>, <span class="green">ben-string</span>;</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>stderr</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">stderr</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"6:stderr", ben-string;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"6:stderr"</span>, <span class="green">ben-string</span>;</code></p></td>
 </tr>
 <tr>
-<td class="tableblock halign-right valign-top"><p class="tableblock"><code>exitcode</code></p></td>
+<td class="tableblock halign-right valign-top"><p class="tableblock"><code><span class="green">exitcode</span></code></p></td>
 <td class="tableblock halign-center valign-top"><p class="tableblock"><code>=</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>"8:exitcode", ben-integer;</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code><span class="red">"8:exitcode"</span>, <span class="green">ben-integer</span>;</code></p></td>
 </tr>
 </tbody>
 </table></div></td>
@@ -765,12 +741,19 @@ The exit code is returned by the client program unless it encounters a different
 </table>
 </div>
 </div>
+<div class="sect2">
+<h3 id="_termination">Termination</h3>
+<div class="paragraph">
+<p>The client will keep listening until the server sends the end-of-list.
+After that, the client will attempt to <code>shutdown(2)</code> and <code>close(2)</code> the socket regardless of whether or not the server closes the socket.</p>
+</div>
+</div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-02-06 16:09:38 UTC
+Last updated 2025-02-06 23:51:27 UTC
 </div>
 </div>
 </body>
