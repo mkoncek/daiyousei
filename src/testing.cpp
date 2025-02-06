@@ -79,6 +79,11 @@ void testing::Test_case::operator()() const
 	}
 }
 
+void fail_because(std::string_view message, std::source_location location)
+{
+	throw testing::Test_failure(location) << message;
+}
+
 void assert_true(bool value, std::source_location location)
 {
 	if (not value)

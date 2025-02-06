@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 
 #include <algorithm>
 #include <limits>
@@ -802,8 +803,6 @@ struct Deserializer
 				return std::unexpected(Deserialization_error::incomplete_message);
 			}
 			
-			// std::cout << "DATA: " << data_ << "| END OF DATA\n";
-			
 			if (not stack_.empty())
 			{
 				auto& ref_type = typeid(*stack_.back());
@@ -828,7 +827,6 @@ struct Deserializer
 				{
 					auto* string = static_cast<deserialized::Byte_string*>(stack_.back());
 					auto len = std::min(string->remaining(), data_.size());
-					// std::cout << "len: " << len << "\n";
 					if (auto result = string->append(stack_, std::string_view(data_.data(), len)); not result)
 					{
 						return std::unexpected(result.error());
@@ -882,7 +880,6 @@ struct Deserializer
 				}
 				++end;
 				consume(end);
-				// std::cout << "after consuming string prefix: " << data_ << "\n";
 				if (auto result = consume_value(std::move(byte_string)); not result)
 				{
 					return std::unexpected(result.error());
@@ -939,11 +936,139 @@ private:
 	virtual void visit_list_end() {}
 	
 	virtual void visit_dictionary_begin() {}
-	virtual void visit_dictionary_field() {} // TODO
 	virtual void visit_dictionary_end() {}
+	
+	void pre_visit_integer(bencode::Integer value)
+	{
+		try_finish_dictionary_value();
+		visit_integer(value);
+	}
+	
+	void pre_visit_byte_string(std::string_view value)
+	{
+		if (auto dfl = Stack_entry::from(stack_))
+		{
+			if (dfl->type_ == Stack_entry::Type::list)
+			{
+			}
+			else if (dfl->expecting_key_ and dfl->length_ == Stack_entry::npos())
+			{
+				stack_ += value;
+				stack_ += Stack_entry::new_dictionary_entry(value);
+			}
+			else if (dfl->expecting_key_ and dfl->length_ != Stack_entry::npos())
+			{
+				auto prev_key = std::string_view(stack_.data() + stack_.size() - sizeof(Stack_entry) - dfl->length_, dfl->length_);
+				auto cmp = prev_key <=> value;
+				if (cmp == std::strong_ordering::greater)
+				{
+					throw Deserialization_exception(std::string("unsorted dictionary: '") + std::string(prev_key) +  "' is greater than '" + std::string(value) + "'");
+				}
+				else if (cmp == std::strong_ordering::equal)
+				{
+					throw Deserialization_exception(std::string("duplicate key: '") + std::string(value) + "'");
+				}
+				
+				stack_.resize(stack_.size() - sizeof(Stack_entry) - prev_key.size());
+				stack_ += value;
+				stack_ += Stack_entry::new_dictionary_entry(value);
+			}
+			else
+			{
+				finish_dictionary_value(*dfl);
+			}
+		}
+		
+		visit_byte_string(value);
+	}
+	
+	void pre_visit_list_end()
+	{
+		try_finish_dictionary_value();
+		visit_list_end();
+	}
+	
+	void pre_visit_dictionary_end()
+	{
+		try_finish_dictionary_value();
+		visit_dictionary_end();
+	}
+	
+	struct Stack_entry
+	{
+		enum struct Type : std::uint8_t
+		{
+			list,
+			dictionary,
+		}
+		type_ : 1;
+		bool expecting_key_ : 1;
+		/// npos if no key has yet been encountered
+		std::uint16_t length_ : 14;
+		
+		static Stack_entry new_list_entry() noexcept
+		{
+			return Stack_entry {.type_ = Type::list, .expecting_key_ = false, .length_ = 0};
+		}
+		
+		static Stack_entry new_dictionary_entry() noexcept
+		{
+			return Stack_entry {.type_ = Type::dictionary, .expecting_key_ = true, .length_ = npos()};
+		}
+		
+		static Stack_entry new_dictionary_entry(std::string_view key) noexcept
+		{
+			return Stack_entry {.type_ = Type::dictionary, .expecting_key_ = false, .length_ = std::uint16_t(key.size())};
+		}
+		
+		constexpr static std::uint16_t npos() noexcept
+		{
+			return std::numeric_limits<std::uint16_t>::max() >> 2;
+		}
+		
+		operator std::string_view() const noexcept
+		{
+			return std::string_view(reinterpret_cast<const char*>(this), sizeof(Stack_entry));
+		}
+		
+		static std::optional<Stack_entry> from(std::string_view stack) noexcept
+		{
+			if (stack.size() >= sizeof(Stack_entry))
+			{
+				auto result = Stack_entry();
+				std::memcpy(&result, stack.data() + stack.size() - sizeof(Stack_entry), sizeof(Stack_entry));
+				return result;
+			}
+			
+			return {};
+		}
+	};
+	
+	void finish_dictionary_value(Stack_entry entry)
+	{
+		entry.expecting_key_ = true;
+		stack_.resize(stack_.size() - sizeof(Stack_entry));
+		stack_ += entry;
+	}
+	
+	void try_finish_dictionary_value()
+	{
+		if (auto entry = Stack_entry::from(stack_))
+		{
+			if (entry->type_ == Stack_entry::Type::dictionary and entry->expecting_key_ == false)
+			{
+				finish_dictionary_value(*entry);
+			}
+		}
+	}
 	
 public:
 	virtual ~Streaming_deserializer() = default;
+	
+	bool finished() const noexcept
+	{
+		return data_.empty() and stack_.empty() and not expected_byte_string_length_.has_value();
+	}
 	
 	void receive(std::string_view data)
 	{
@@ -964,7 +1089,7 @@ public:
 			{
 				if (data_.size() >= *expected_byte_string_length_)
 				{
-					visit_byte_string(std::string_view(data_.data(), *expected_byte_string_length_));
+					pre_visit_byte_string(std::string_view(data_.data(), *expected_byte_string_length_));
 					consume(*expected_byte_string_length_);
 					expected_byte_string_length_.reset();
 					continue;
@@ -978,6 +1103,13 @@ public:
 			
 			if (data_[0] == 'i')
 			{
+				if (auto dfl = Stack_entry::from(stack_))
+				{
+					if (dfl->expecting_key_)
+					{
+						throw Deserialization_exception(std::string("expected a dictionary key, found integer"));
+					}
+				}
 				auto end = data_.find_first_of('e');
 				if (end == std::string::npos)
 				{
@@ -992,7 +1124,7 @@ public:
 					throw Deserialization_exception(std::string("invalid integer value: '") + data_.substr(0, end) + "':" + ec.message());
 				}
 				consume(end);
-				visit_integer(integer);
+				pre_visit_integer(integer);
 			}
 			else if (std::isdigit(data_[0]))
 			{
@@ -1019,7 +1151,7 @@ public:
 				}
 				if (data_.size() >= end + len)
 				{
-					visit_byte_string(std::string_view(data_.data() + end, len));
+					pre_visit_byte_string(std::string_view(data_.data() + end, len));
 					end += len;
 				}
 				else
@@ -1031,27 +1163,33 @@ public:
 			else if (data_[0] == 'l')
 			{
 				consume(1);
-				stack_ += 'l';
+				stack_ += Stack_entry::new_list_entry();
 				visit_list_begin();
 			}
 			else if (data_[0] == 'd')
 			{
 				consume(1);
-				stack_ += 'd';
+				stack_ += Stack_entry::new_dictionary_entry();
 				visit_dictionary_begin();
 			}
 			else if (data_[0] == 'e')
 			{
 				consume(1);
-				if (stack_.ends_with('l'))
+				if (auto dfl = Stack_entry::from(stack_))
 				{
-					stack_.resize(stack_.size() - 1);
-					visit_list_end();
-				}
-				else if (stack_.ends_with('d'))
-				{
-					stack_.resize(stack_.size() - 1);
-					visit_dictionary_end();
+					stack_.resize(stack_.size() - sizeof(Stack_entry));
+					if (dfl->type_ == Stack_entry::Type::list)
+					{
+						pre_visit_list_end();
+					}
+					else if (dfl->type_ == Stack_entry::Type::dictionary)
+					{
+						if (dfl->length_ != Stack_entry::npos())
+						{
+							stack_.resize(stack_.size() - dfl->length_ - sizeof(Stack_entry));
+						}
+						pre_visit_dictionary_end();
+					}
 				}
 				else
 				{

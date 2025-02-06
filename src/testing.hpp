@@ -57,6 +57,8 @@ private:
 	const std::source_location location_;
 };
 
+void fail_because(std::string_view message, std::source_location location = std::source_location::current());
+
 void assert_true(bool value, std::source_location location = std::source_location::current());
 void assert_false(bool value, std::source_location location = std::source_location::current());
 

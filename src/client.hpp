@@ -332,11 +332,6 @@ struct Client : Epoll_client, bencode::Streaming_deserializer
 		throw std::runtime_error(std::string("unexpected start of dictionary"));
 	}
 	
-	void visit_dictionary_field() override
-	{
-		throw std::runtime_error(std::string("unexpected dictionary field"));
-	}
-	
 	void visit_dictionary_end() override
 	{
 		throw std::runtime_error(std::string("unexpected end of dictionary"));
