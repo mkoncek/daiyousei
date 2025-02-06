@@ -1,0 +1,60 @@
+= daiyousei(1)
+:doctype: manpage
+:mansource: DAIYOUSEI
+:manmanual: Daiyousei Manual
+:table-caption!:
+
+== NAME
+daiyousei - a lightweight intermediary for running processes
+
+== SYNOPSIS
+daiyousei [_args..._]
+
+== DESCRIPTION
+Daiyousei is a lightweight program the purpose of which is act as a different process.
+Upon starting, it connects to a running, listening program, referred to as _server_, via a socket.
+Then daiyousei, in this context the _client_, transparently sends and receives fundamental runtime execution data.
+The data include the environment context, arguments, standard input / output streams and the exit code.
+
+=== Communication
+Daiyousei sends the following data immediately on startup:{empty}::
+
+*argv*::: The whole argument array consisting of the executable name and all its command-line arguments.
+*cwd*::: A single string containing the current working directory.
+*env*::: A list of all the environment variables and their values
+
+Additionally, after started, it sends the following data as it arrives:{empty}::
+
+*stdin*::: Possibly repeated standard input byte string chunks.
+
+Daiyousei receives the following data:{empty}::
+
+*stdout*::: Possibly repeated standard output byte string chunks.
+*stderr*::: Possibly repeated standard error output byte string chunks.
+*exitcode*::: The exit code for daiyousei to return.
+
+For detailed information about the communication protocol, read the HTML documentation installed with this package or available online at https://mkoncek.github.io/daiyousei/.
+
+=== Socket
+The tool currently only supports communication over a single Unix domain stream socket.
+
+The socket file path used by daiyousei is selected using the following procedure:
+
+* If *DAIYOUSEI_UNIX_SOCKET* environment variable is defined, it is used.
+* Otherwise the socket file *daiyousei.sock* is searched for in the following locations:
+** In the directory specified by the *XDG_RUNTIME_DIR* environment variable, if defined.
+** In the */tmp* directory.
+
+== ENVIRONMENT VARIABLES
+*DAIYOUSEI_UNIX_SOCKET*:: File path of the Unix domain stream socket that will be used for communication.
+
+== EXIT STATUS
+* If the communication proceeded according to the protocol and no issues were encountered, returns the *exitcode* value received from the server.
+* If any issue was encountered, returns *255*.
+* If a signal was raised, may return a different exit code.
+
+== REPORTING BUGS
+Bugs and feature requests should be reported via the issue tracker at GitHub: https://github.com/mkoncek/daiyousei/issues.
+
+== AUTHOR
+Written by Marián Konček.

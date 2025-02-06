@@ -1,85 +1,67 @@
 [.text-justify]
 = Daiyousei
-
 :source-highlighter: rouge
 :table-caption!:
 
-TODO.
+Daiyousei is a lightweight and efficient program, the purpose of which is act as a different process.
 
-== Running
-When the program starts, the communication channel needs to be already created and the server needs to be listening for connections.
-The client and server then communicate and after the communication is finished.
+It has two primary responsibilities:
 
-If no error is encountered by the client, the exit code from the server is returned.
-In case of an internal error, the programs attempts to return the value `255`, though this may not be guaranteed.
+* Passing its own execution context, environment, arguments and standard input to the remote process.
+* Receiving and printing the standard and error outputs and returning the exit code received from the remote process.
 
-=== Command-line arguments
-The tool does not use any command-line arguments.
-All arguments are passed over the communication channel.
-The tool requires the first argument, i.e. the executable name, also known as `argv[0]` to be valid.
+The use case for this program is in the following situation:
 
-=== Environment variables
-The tool can be configured using the following environment variables.
+* There is a server process running which has single or more responsibilities.
+* The server can be extended to communicate using the Bencode encoding.
+* The simplest way to send requests is by spawning (this) process.
 
-[cols = 2]
-[%autowidth]
-|===
-|Name|Description
+== Building
+The project is written in C{plus}{plus} and requires a C{plus}{plus} compiler supporting the language version 23.
+Build instructions are managed in the `Makefile`.
 
-|`DAIYOUSEI_UNIX_SOCKET`|File path of the Unix socket that will be used for communication
-|===
+Build the project by running:
+----
+make compile
+----
 
-== Communication
-All communication is encoded in the https://en.wikipedia.org/wiki/Bencode[Bencode] encoding.
-Both parties communicate by sending a single list to each other.
-The start of the list means initiating communication and the list end means proper termination of communication.
-The list contains key-value pairs, similar to a dictionary but the keys can be repeated.
+=== Testing
+The following targets use extended compile and link flags, adding Address Sanitizer and Undefined Behavior Sanitizer.
+In order to make sure everything is built with these flags, you may need to clean the project:
+----
+make clean
+----
 
-=== Socket path
-The Unix socket file path used for communication is selected using the following procedure.
+Run unit tests also written in C{plus}{plus}:
+----
+make test-unit
+----
 
-* If the variable `DAIYOUSEI_UNIX_SOCKET` is defined, it is used.
-* Otherwise if `XDG_RUNTIME_DIR` is defined, the socket `daiyousei.sock` is created inside the directory.
-* Otherwise the socket is created inside `/tmp`.
+Run tests using a server written in Python:
+----
+make test-server
+----
 
-=== Protocol
-The communication protocol used by the communicating parties as follows.
+=== Coverage
+There is a `coverage` target which adds additional compile and link flags (note about cleaning the project) and runs the tests.
+----
+make coverage
+----
 
-==== From client to server
-When the client starts, it immediately sends its command-line arguments, current working directory and the environment variables over the communication channel.
-Standard input is sent in chunks as the program receives it.
-When the standard input is closed on the client side, it sends the closing end of the list and closes the connection.
+The generated report can be viewed in `target/coverage/index.html`.
 
-.BNF notation of the client-to-server communication protocol
-[cols = ">1,^1,1"]
-[frame = "all"]
-[grid = "rows"]
-[%autowidth]
-|===
-|`Request`|`::=`|`"l"` `Argv` `Cwd` `Env` `Stdin` `"e"`
-|`Argv`|`::=`|`"4:argv"` `"l"` `Args` `"e"`
-|`Args`|`::=`|`Ben-string`
-|`Args`|`::=`|`Args` `Ben-string`
-|`Cwd`|`::=`|`"3:cwd"` `Ben-string`
-|`Env`|`::=`|`"3:env"` `"l"` `Pairs` `"e"`
-|`Pairs`|`::=`|
-|`Pairs`|`::=`|`Pairs` `Ben-string` `Ben-string`
-|`Stdin`|`::=`|
-|`Stdin`|`::=`|`Stdin` `"5:stdin"` `Ben-string`
-|===
+=== Building documentation
+Documentation is built using `asciidoctor`.
 
-==== From server to client
-The server communicates by sending its outputs in chunks and the exit code as the last value.
-The exit code is returned by the client program unless it encounters a different error.
+Build HTML documentation and place it in `target/doc`:
+----
+make doc
+----
 
-.BNF notation of the server-to-client communication protocol
-[cols = ">1,^1,1"]
-[frame = "all"]
-[grid = "rows"]
-[%autowidth]
-|===
-|`Response`|`::=`|`"l"` `Chunk` `Exit` `"e"`
-|`Chunk`|`::=`|`"6:stdout"` `Ben-string`
-|`Chunk`|`::=`|`"6:stderr"` `Ben-string`
-|`Exit`|`::=`|`"8:exitcode"` `Ben-integer`
-|===
+Build manual pages and place them in `target/manpages`:
+----
+make manpages
+----
+
+== Specification
+See the https://mkoncek.github.io/daiyousei[full documentation] describing runtime behaviour in detail.

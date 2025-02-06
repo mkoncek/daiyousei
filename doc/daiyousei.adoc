@@ -4,26 +4,12 @@
 :source-highlighter: rouge
 :table-caption!:
 
-TODO.
+A lightweight intermediary for running processes.
 
-== Building
-The project is written in C{plus}{plus} and requires a C{plus}{plus} compiler supporting the language version 23.
-Build instructions are managed in the `Makefile`.
-
-Build the project by running:
-----
-make compile
-----
-
-Run unit tests also written in C{plus}{plus}:
-----
-make test-unit
-----
-
-Run tests using a server written in Python:
-----
-make test-server
-----
+Daiyousei is a lightweight program the purpose of which is act as a different process.
+Upon starting, it connects to a running, listening program, referred to as _server_, via a socket.
+Then daiyousei, in this context the _client_, transparently sends and receives fundamental runtime execution data.
+The data include the environment context, arguments, standard input / output streams and the exit code.
 
 == Running
 When the program starts, the communication channel needs to be already created and the server needs to be listening for connections.
@@ -32,13 +18,13 @@ The client and server then communicate and after the communication is finished.
 If no error is encountered by the client, the exit code from the server is returned.
 In case of an internal error, the programs attempts to return the value `255`, though this may not be guaranteed.
 
-=== Command-line arguments
+=== Options
 The tool does not use any command-line arguments.
 All arguments are passed over the communication channel.
 The tool requires the first argument, i.e. the executable name, also known as `argv[0]`, to be valid.
 
 === Environment variables
-The tool can be configured using the following environment variables.
+The tool can be configured using the following environment variables:
 
 [cols = 2]
 [%autowidth]
@@ -55,11 +41,13 @@ The start of the list means initiating communication and the list end means prop
 The list contains key-value pairs, similar to a dictionary but the keys can be repeated.
 
 === Socket path
-The Unix socket file path used for communication is selected using the following procedure.
+Currently only Unix domain stream socket communication is supported.
+
+The Unix socket file path used for communication is selected using the following procedure:
 
 * If the variable `DAIYOUSEI_UNIX_SOCKET` is defined, it is used.
-* Otherwise if `XDG_RUNTIME_DIR` is defined, the socket `daiyousei.sock` is created inside the directory.
-* Otherwise the socket is created inside `/tmp`.
+* Otherwise if `XDG_RUNTIME_DIR` is defined, the socket `daiyousei.sock` inside the directory is used.
+* Otherwise the socket `daiyousei.sock` inside the `/tmp` directory is used.
 
 === Protocol
 The communication protocol used by the communicating parties as follows.
@@ -80,28 +68,28 @@ When the standard input is closed on the client side, it sends the closing end o
 [grid = "rows"]
 [%autowidth]
 !===
-!`Request`!`::=`!`"l" Argv Cwd Env Stdin "e"`
-!`Argv`!`::=`!`"4:argv" "l" Args "e"`
-!`Args`!`::=`!`Ben-string`
-!`Args`!`::=`!`Args Ben-string`
-!`Cwd`!`::=`!`"3:cwd" Ben-string`
-!`Env`!`::=`!`"3:env" "l" Pairs "e"`
-!`Pairs`!`::=`!
-!`Pairs`!`::=`!`Pairs Ben-string Ben-string`
-!`Stdin`!`::=`!
-!`Stdin`!`::=`!`Stdin "5:stdin" Ben-string`
+!`[green]#Request#`!`::=`!`[red]#"l"# [green]#Argv# [green]#Cwd# [green]#Env# [green]#Stdin# [red]#"e"#`
+!`[green]#Argv#`!`::=`!`[red]#"4:argv"# [red]#"l"# [green]#Args# [red]#"e"#`
+!`[green]#Args#`!`::=`!`[green]#Ben-string#`
+!`[green]#Args#`!`::=`!`[green]#Args# [green]#Ben-string#`
+!`[green]#Cwd#`!`::=`!`[red]#"3:cwd"# [green]#Ben-string#`
+!`[green]#Env#`!`::=`!`[red]#"3:env"# [red]#"l"# [green]#Pairs# [red]#"e"#`
+!`[green]#Pairs#`!`::=`!
+!`[green]#Pairs#`!`::=`!`[green]#Pairs# [green]#Ben-string# [green]#Ben-string#`
+!`[green]#Stdin#`!`::=`!
+!`[green]#Stdin#`!`::=`!`[green]#Stdin# [red]#"5:stdin"# [green]#Ben-string#`
 !===
-|.EBNF notation, client-to-server protocol
+|.Extended BNF notation, client-to-server protocol
 [cols = ">1,^1,1"]
 [frame = "all"]
 [grid = "rows"]
 [%autowidth]
 !===
-!`request`!`=`!`"l", argv, cwd, env, {stdin}, "e";`
-!`argv`!`=`!`"4:argv", "l", {ben-string}, "e";`
-!`cwd`!`=`!`"3:cwd", ben-string;`
-!`env`!`=`!`"3:env", "l", {ben-string, ben-string} "e";`
-!`stdin`!`=`!`"5:stdin", ben-string;`
+!`[green]#request#`!`=`!`[red]#"l"#, [green]#argv#, [green]#cwd#, [green]#env#, { [green]#stdin# }, [red]#"e"#;`
+!`[green]#argv#`!`=`!`[red]#"4:argv"#, [red]#"l"#, { [green]#ben-string# }, [red]#"e"#;`
+!`[green]#cwd#`!`=`!`[red]#"3:cwd"#, [green]#ben-string#;`
+!`[green]#env#`!`=`!`[red]#"3:env"#, [red]#"l"#, { [green]#ben-string#, [green]#ben-string# }, [red]#"e"#;`
+!`[green]#stdin#`!`=`!`[red]#"5:stdin"#, [green]#ben-string#;`
 !===
 |===
 
@@ -120,20 +108,24 @@ The exit code is returned by the client program unless it encounters a different
 [grid = "rows"]
 [%autowidth]
 !===
-!`Response`!`::=`!`"l" Chunk Exit "e"`
-!`Chunk`!`::=`!`"6:stdout" Ben-string`
-!`Chunk`!`::=`!`"6:stderr" Ben-string`
-!`Exit`!`::=`!`"8:exitcode" Ben-integer`
+!`[green]#Response#`!`::=`!`[red]#"l"# [green]#Chunk# [green]#Exit# [red]#"e"#`
+!`[green]#Chunk#`!`::=`!`[red]#"6:stdout"# [green]#Ben-string#`
+!`[green]#Chunk#`!`::=`!`[red]#"6:stderr"# [green]#Ben-string#`
+!`[green]#Exit#`!`::=`!`[red]#"8:exitcode"# [green]#Ben-integer#`
 !===
-|.EBNF notation, server-to-client protocol
+|.Extended BNF notation, server-to-client protocol
 [cols = ">1,^1,1"]
 [frame = "all"]
 [grid = "rows"]
 [%autowidth]
 !===
-!`response`!`=`!`"l", {stdout \| stderr}, exitcode, "e";`
-!`stdout`!`=`!`"6:stdout", ben-string;`
-!`stderr`!`=`!`"6:stderr", ben-string;`
-!`exitcode`!`=`!`"8:exitcode", ben-integer;`
+!`[green]#response#`!`=`!`[red]#"l"#, { [green]#stdout# \| [green]#stderr# }, [green]#exitcode#, [red]#"e"#;`
+!`[green]#stdout#`!`=`!`[red]#"6:stdout"#, [green]#ben-string#;`
+!`[green]#stderr#`!`=`!`[red]#"6:stderr"#, [green]#ben-string#;`
+!`[green]#exitcode#`!`=`!`[red]#"8:exitcode"#, [green]#ben-integer#;`
 !===
 |===
+
+=== Termination
+The client will keep listening until the server sends the end-of-list.
+After that, the client will attempt to `shutdown(2)` and `close(2)` the socket regardless of whether or not the server closes the socket.

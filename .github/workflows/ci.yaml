@@ -24,7 +24,7 @@ jobs:
         run: |
           source /opt/rh/gcc-toolset-13/enable
           source /opt/rh/make*/enable
-          make -j8 test-compile
+          make -j8 test-compile doc manpages
       - name: Run unit tests
         run: |
           source /opt/rh/gcc-toolset-13/enable
