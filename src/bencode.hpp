@@ -22,6 +22,9 @@ namespace bencode
 struct Serializable;
 using Integer = std::intmax_t;
 
+// "i" + digits10 + round up + minus sign + "e"
+constexpr std::size_t max_integer_length = 1 + std::numeric_limits<bencode::Integer>::digits10 + 1 + 1 + 1;
+
 namespace serializable
 {
 struct Field;
@@ -139,8 +142,7 @@ serializable::Sorted_dictionary::Sorted_dictionary(Dictionary value) noexcept : 
 void serialize(std::string& output, serializable::Integer value)
 {
 	auto prev_size = output.size();
-	// "i" + digits10 + round up + minus sign + "e"
-	output.resize(prev_size + 1 + std::numeric_limits<bencode::Integer>::digits10 + 1 + 1 + 1);
+	output.resize(prev_size + bencode::max_integer_length);
 	output[prev_size] = 'i';
 	++prev_size;
 	auto [end, error] = std::to_chars(
@@ -946,36 +948,44 @@ private:
 	
 	void pre_visit_byte_string(std::string_view value)
 	{
-		if (auto dfl = Stack_entry::from(stack_))
+		if (auto entry = Stack_entry::from(stack_))
 		{
-			if (dfl->type_ == Stack_entry::Type::list)
+			if (entry->type_ == Stack_entry::Type::list)
 			{
 			}
-			else if (dfl->expecting_key_ and dfl->length_ == Stack_entry::npos())
+			else if (entry->expecting_key_)
 			{
-				stack_ += value;
-				stack_ += Stack_entry::new_dictionary_entry(value);
-			}
-			else if (dfl->expecting_key_ and dfl->length_ != Stack_entry::npos())
-			{
-				auto prev_key = std::string_view(stack_.data() + stack_.size() - sizeof(Stack_entry) - dfl->length_, dfl->length_);
-				auto cmp = prev_key <=> value;
-				if (cmp == std::strong_ordering::greater)
+				if (value.size() >= Stack_entry::npos)
 				{
-					throw Deserialization_exception(std::string("unsorted dictionary: '") + std::string(prev_key) +  "' is greater than '" + std::string(value) + "'");
-				}
-				else if (cmp == std::strong_ordering::equal)
-				{
-					throw Deserialization_exception(std::string("duplicate key: '") + std::string(value) + "'");
+					throw Deserialization_exception(std::string("dictionary key too long"));
 				}
 				
-				stack_.resize(stack_.size() - sizeof(Stack_entry) - prev_key.size());
-				stack_ += value;
-				stack_ += Stack_entry::new_dictionary_entry(value);
+				if (entry->length_ == Stack_entry::npos)
+				{
+					stack_ += value;
+					stack_ += Stack_entry::new_dictionary_entry(value);
+				}
+				else
+				{
+					auto prev_key = std::string_view(stack_.data() + stack_.size() - sizeof(Stack_entry) - entry->length_, entry->length_);
+					auto cmp = prev_key <=> value;
+					if (cmp == std::strong_ordering::greater)
+					{
+						throw Deserialization_exception(std::string("unsorted dictionary: '") + std::string(prev_key) +  "' is greater than '" + std::string(value) + "'");
+					}
+					else if (cmp == std::strong_ordering::equal)
+					{
+						throw Deserialization_exception(std::string("duplicate key: '") + std::string(value) + "'");
+					}
+					
+					stack_.resize(stack_.size() - sizeof(Stack_entry) - prev_key.size());
+					stack_ += value;
+					stack_ += Stack_entry::new_dictionary_entry(value);
+				}
 			}
 			else
 			{
-				finish_dictionary_value(*dfl);
+				finish_dictionary_value(*entry);
 			}
 		}
 		
@@ -1013,7 +1023,7 @@ private:
 		
 		static Stack_entry new_dictionary_entry() noexcept
 		{
-			return Stack_entry {.type_ = Type::dictionary, .expecting_key_ = true, .length_ = npos()};
+			return Stack_entry {.type_ = Type::dictionary, .expecting_key_ = true, .length_ = npos};
 		}
 		
 		static Stack_entry new_dictionary_entry(std::string_view key) noexcept
@@ -1021,10 +1031,7 @@ private:
 			return Stack_entry {.type_ = Type::dictionary, .expecting_key_ = false, .length_ = std::uint16_t(key.size())};
 		}
 		
-		constexpr static std::uint16_t npos() noexcept
-		{
-			return std::numeric_limits<std::uint16_t>::max() >> 2;
-		}
+		constexpr static std::uint16_t npos = std::numeric_limits<std::uint16_t>::max() >> 2;
 		
 		operator std::string_view() const noexcept
 		{
@@ -1103,14 +1110,26 @@ public:
 			
 			if (data_[0] == 'i')
 			{
-				if (auto dfl = Stack_entry::from(stack_))
+				if (auto entry = Stack_entry::from(stack_))
 				{
-					if (dfl->expecting_key_)
+					if (entry->expecting_key_)
 					{
 						throw Deserialization_exception(std::string("expected a dictionary key, found integer"));
 					}
 				}
-				auto end = data_.find_first_of('e');
+				auto end = std::string::npos;
+				for (std::size_t i = 1; i != data_.size(); ++i)
+				{
+					if (data_[i] == 'e')
+					{
+						end = i;
+						break;
+					}
+					if (i == bencode::max_integer_length)
+					{
+						throw Deserialization_exception(std::string("integer too long"));
+					}
+				}
 				if (end == std::string::npos)
 				{
 					// wait for more data
@@ -1175,18 +1194,18 @@ public:
 			else if (data_[0] == 'e')
 			{
 				consume(1);
-				if (auto dfl = Stack_entry::from(stack_))
+				if (auto entry = Stack_entry::from(stack_))
 				{
 					stack_.resize(stack_.size() - sizeof(Stack_entry));
-					if (dfl->type_ == Stack_entry::Type::list)
+					if (entry->type_ == Stack_entry::Type::list)
 					{
 						pre_visit_list_end();
 					}
-					else if (dfl->type_ == Stack_entry::Type::dictionary)
+					else if (entry->type_ == Stack_entry::Type::dictionary)
 					{
-						if (dfl->length_ != Stack_entry::npos())
+						if (entry->length_ != Stack_entry::npos)
 						{
-							stack_.resize(stack_.size() - dfl->length_ - sizeof(Stack_entry));
+							stack_.resize(stack_.size() - entry->length_ - sizeof(Stack_entry));
 						}
 						pre_visit_dictionary_end();
 					}

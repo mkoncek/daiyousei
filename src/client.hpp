@@ -255,7 +255,6 @@ struct Client : Epoll_client, bencode::Streaming_deserializer
 					else
 					{
 						auto read_result = read_into(events[i].data.fd, data_);
-						// std::cout << "DATA|" << data_ << "|END OF DATA" << "\n";
 						if (read_result == 0)
 						{
 							server_input_available = false;
