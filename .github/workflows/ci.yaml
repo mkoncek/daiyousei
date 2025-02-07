@@ -35,7 +35,7 @@ jobs:
           source /opt/rh/gcc-toolset-13/enable
           source /opt/rh/make*/enable
           make test-server
-      - name: Install package
+      - name: Install files
         env:
           buildroot: /opt/daiyousei
           bindir: bin
@@ -43,5 +43,13 @@ jobs:
           docdir: doc
         run: |
           ./install.sh
-          cat ./target/installed_files
+      - name: Print installed files
+        run: |
+          echo "LISTED INSTALLED FILES"
+          echo "======================"
+          sort -u ./target/installed_files
+          echo "======================"
+          echo "ACTUALLY INSTALLED FILES"
+          echo "========================"
           find /opt/daiyousei -type f -printf '%P\n' | sort -u
+          echo "========================"
