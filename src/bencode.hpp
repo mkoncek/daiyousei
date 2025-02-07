@@ -1147,7 +1147,20 @@ public:
 			}
 			else if (std::isdigit(data_[0]))
 			{
-				auto end = data_.find_first_of(':');
+				auto end = std::string::npos;
+				for (std::size_t i = 1; i != data_.size(); ++i)
+				{
+					if (data_[i] == ':')
+					{
+						end = i;
+						break;
+					}
+					// Allow strings up to 999'999 characters long
+					if (i == 6)
+					{
+						throw Deserialization_exception(std::string("byte string too long"));
+					}
+				}
 				if (end == std::string::npos)
 				{
 					// wait for more data
