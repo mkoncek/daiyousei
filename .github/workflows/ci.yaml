@@ -35,3 +35,13 @@ jobs:
           source /opt/rh/gcc-toolset-13/enable
           source /opt/rh/make*/enable
           make test-server
+      - name: Install package
+        env:
+          buildroot: /opt/daiyousei
+          bindir: bin
+          mandir: man
+          docdir: doc
+        run: |
+          ./install.sh
+          cat ./target/installed_files
+          find /opt/daiyousei -type f -printf '%P\n' | sort -u
