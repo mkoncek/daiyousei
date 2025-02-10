@@ -48,12 +48,12 @@ test-deserialization: target/bin/test_bencode_deserialization
 test-streaming-deserialization: target/bin/test_bencode_streaming_deserialization
 	@./$<
 
-target/doc/daiyousei.html: doc/daiyousei.adoc | target/doc/
-	asciidoctor -w -D target/doc $<
-doc: target/doc/daiyousei.html
+target/doc/index.html: doc/daiyousei.adoc | target/doc/
+	asciidoctor -o $(@F) -w -D $(@D) $<
+doc: target/doc/index.html
 
 target/manpages/daiyousei.1: doc/daiyousei.1.adoc | target/manpages/
-	asciidoctor -w -b manpage -D target/manpages $<
+	asciidoctor -w -b manpage -D $(@D) $<
 manpages: target/manpages/daiyousei.1
 
 test-compile: CXXFLAGS += -fsanitize=undefined,address -D_GLIBCXX_ASSERTIONS -D_GLIBCXX_DEBUG
